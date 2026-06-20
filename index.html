@@ -972,7 +972,7 @@
       <div class="logo-star">🌟</div>
       <div class="logo-name" id="schoolName">星光教育</div>
       <div class="logo-sub">AI 智能助手 · 内测版</div>
-      <div style="margin-top:10px; display:flex; align-items:center; justify-content:space-between">
+      <div id="userBar" style="display:none; margin-top:10px; align-items:center; justify-content:space-between">
         <span id="loggedInUser" style="font-size:11px; color:var(--text-muted)"></span>
         <button onclick="logout()" style="
           font-size:10px; padding:3px 8px; border:1px solid var(--border);
@@ -1027,7 +1027,6 @@
       </div>
       <div class="header-actions">
         <button class="header-btn" onclick="clearHistory()">🗑️ 清空对话</button>
-        <button class="header-btn" id="identityToggle" onclick="toggleIdentity()">👨‍👩‍👧 身份: 家长</button>
         <button class="header-btn" id="themeToggle" onclick="toggleTheme()">🌙 暗色模式</button>
       </div>
     </header>
@@ -1291,6 +1290,7 @@ function hideAuthModal() {
 }
 
 function logout() {
+  if (!confirm('确定退出登录？')) return;
   localStorage.removeItem('xg_token');
   localStorage.removeItem('xg_username');
   localStorage.removeItem('xg_session_id');
@@ -1335,9 +1335,11 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 function initApp() {
-  // 显示用户名
+  // 显示用户名 + 退出按钮
   const unEl = document.getElementById('loggedInUser');
   if (unEl) unEl.textContent = '👤 ' + authUsername;
+  const bar = document.getElementById('userBar');
+  if (bar) bar.style.display = 'flex';
 
   // 带 JWT 初始化 Socket
   socket = io({ auth: { token: authToken } });
@@ -1465,6 +1467,8 @@ async function checkHealth() {
     }
     if (data.schoolName) {
       document.getElementById('schoolName').textContent = data.schoolName;
+      const s2 = document.getElementById('schoolName2');
+      if (s2) s2.textContent = data.schoolName;
       document.title = data.schoolName + ' · AI 智能助手';
     }
   } catch {}
@@ -1476,7 +1480,7 @@ async function loadCourses() {
     const data = await res.json();
     const list = document.getElementById('courseList');
     list.innerHTML = data.courses.map(c => `
-      <div class="course-card" onclick="quickSend('请介绍一下${c.name}的详情和权益')">
+      <div class="course-card" onclick="prefillInput('请介绍一下${c.name}的详情和权益')">
         <div class="course-name">${c.name}</div>
         <div class="course-price">¥${c.price.toLocaleString()} <span>/ ${c.duration}</span></div>
         <ul class="course-features">
@@ -1568,6 +1572,14 @@ function sendMessage() {
 function quickSend(msg) {
   document.getElementById('messageInput').value = msg;
   sendMessage();
+}
+
+// 填入输入框但不发送（用于课程卡片点击）
+function prefillInput(msg) {
+  const input = document.getElementById('messageInput');
+  input.value = msg;
+  input.focus();
+  autoResize(input);
 }
 
 function handleKeydown(e) {
@@ -1941,6 +1953,7 @@ document.addEventListener('keydown', (event) => {
 
 // ─── 清空对话 ─────────────────────────────────────────────────
 function clearHistory() {
+  if (!confirm('确定清空本次对话记录？此操作不可恢复。')) return;
   socket.emit('clear_history', { sessionId });
   const msgs = document.getElementById('chatMessages');
   msgs.innerHTML = `
