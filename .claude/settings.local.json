@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node test-data-service.js)",
+      "Bash(node test-tools.js)",
+      "Bash(node test-error-service.js)",
+      "Bash(npm install:*)",
+      "Bash(node -c server.js)",
+      "Bash(node -c knowledge/index.js)",
+      "Bash(node -c knowledge/enhanced-retriever.js)",
+      "Bash(node -c knowledge/user-profile.js)",
+      "Bash(node -c knowledge/file-parser.js)",
+      "Bash(node -c knowledge/dashboard.js)",
+      "Bash(npm list *)",
+      "Bash(cmd.exe /c \"where node\")",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git branch *)",
+      "Bash(git remote *)"
+    ]
+  }
+}
