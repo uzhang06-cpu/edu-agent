@@ -1417,12 +1417,20 @@ async function selectSession(id) {
   try {
     const res = await authFetch(`/api/sessions/${id}`);
     const data = await res.json();
-    
+
+    // session 不存在（旧ID或不属于当前用户），直接新建
+    if (!res.ok || !data.id) {
+      localStorage.removeItem('xg_session_id');
+      sessionId = null;
+      await createNewSession();
+      return;
+    }
+
     msgs.innerHTML = `
       <div class="welcome-msg">
         <span class="welcome-icon">🌟</span>
-        <h3>正在查看：${data.title}</h3>
-        <p>创建于 ${new Date(data.createdAt).toLocaleString()}</p>
+        <h3>正在查看：${data.title || '咨询会话'}</h3>
+        <p>创建于 ${data.createdAt ? new Date(data.createdAt).toLocaleString() : '-'}</p>
       </div>
       <div class="date-divider">对话开始</div>
     `;
