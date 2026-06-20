@@ -972,6 +972,14 @@
       <div class="logo-star">🌟</div>
       <div class="logo-name" id="schoolName">星光教育</div>
       <div class="logo-sub">AI 智能助手 · 内测版</div>
+      <div style="margin-top:10px; display:flex; align-items:center; justify-content:space-between">
+        <span id="loggedInUser" style="font-size:11px; color:var(--text-muted)"></span>
+        <button onclick="logout()" style="
+          font-size:10px; padding:3px 8px; border:1px solid var(--border);
+          border-radius:6px; background:transparent; color:var(--text-muted);
+          cursor:pointer
+        ">退出</button>
+      </div>
     </div>
 
       <div class="sidebar-section">
@@ -1169,9 +1177,128 @@
 
 </div>
 
+<!-- ══ 登录/注册弹窗 ══════════════════════════════════════════════ -->
+<div id="authModal" style="
+  display:none; position:fixed; inset:0; z-index:9999;
+  background:rgba(0,0,0,0.6); backdrop-filter:blur(8px);
+  align-items:center; justify-content:center;
+">
+  <div style="
+    background:var(--card); border:1px solid var(--border);
+    border-radius:20px; padding:40px 36px; width:360px;
+    box-shadow:0 30px 80px rgba(0,0,0,0.3);
+  ">
+    <div style="text-align:center; margin-bottom:28px">
+      <div style="font-size:32px; margin-bottom:8px">🌟</div>
+      <div id="schoolName2" style="font-family:'Noto Serif SC',serif; font-size:20px; font-weight:700; color:var(--gold)">星光教育</div>
+      <div style="font-size:12px; color:var(--text-muted); margin-top:4px">AI 智能助手</div>
+    </div>
+
+    <!-- Tab 切换 -->
+    <div style="display:flex; gap:8px; margin-bottom:24px; background:var(--ink-3); border-radius:10px; padding:4px">
+      <button id="tabLogin" onclick="switchTab('login')" style="
+        flex:1; padding:8px; border:none; border-radius:8px; cursor:pointer;
+        background:var(--gold); color:#fff; font-size:13px; font-weight:600; transition:all 0.2s
+      ">登录</button>
+      <button id="tabRegister" onclick="switchTab('register')" style="
+        flex:1; padding:8px; border:none; border-radius:8px; cursor:pointer;
+        background:transparent; color:var(--text-muted); font-size:13px; transition:all 0.2s
+      ">注册</button>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:12px">
+      <input id="authUsername" type="text" placeholder="用户名" maxlength="20" style="
+        padding:12px 14px; border:1px solid var(--border); border-radius:10px;
+        background:var(--ink); color:var(--text-primary); font-size:14px; outline:none;
+        transition:border-color 0.2s
+      " onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'">
+      <input id="authPassword" type="password" placeholder="密码（至少6位）" style="
+        padding:12px 14px; border:1px solid var(--border); border-radius:10px;
+        background:var(--ink); color:var(--text-primary); font-size:14px; outline:none;
+        transition:border-color 0.2s
+      " onfocus="this.style.borderColor='var(--gold)'" onblur="this.style.borderColor='var(--border)'"
+        onkeydown="if(event.key==='Enter') submitAuth()">
+      <div id="authError" style="color:var(--rose); font-size:12px; min-height:16px; text-align:center"></div>
+      <button onclick="submitAuth()" style="
+        padding:13px; background:var(--gold); color:#fff; border:none;
+        border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;
+        transition:opacity 0.2s
+      " onmouseover="this.style.opacity=0.85" onmouseout="this.style.opacity=1" id="authSubmitBtn">登录</button>
+    </div>
+  </div>
+</div>
+
 <script>
+// ─── 认证状态 ─────────────────────────────────────────────────
+let authToken    = localStorage.getItem('xg_token') || '';
+let authUsername = localStorage.getItem('xg_username') || '';
+let authTab      = 'login'; // 'login' | 'register'
+
+function authFetch(url, options = {}) {
+  options.headers = options.headers || {};
+  if (authToken) options.headers['Authorization'] = 'Bearer ' + authToken;
+  return fetch(url, options);
+}
+
+function switchTab(tab) {
+  authTab = tab;
+  document.getElementById('authError').textContent = '';
+  const isLogin = tab === 'login';
+  document.getElementById('tabLogin').style.background    = isLogin ? 'var(--gold)' : 'transparent';
+  document.getElementById('tabLogin').style.color         = isLogin ? '#fff' : 'var(--text-muted)';
+  document.getElementById('tabRegister').style.background = !isLogin ? 'var(--gold)' : 'transparent';
+  document.getElementById('tabRegister').style.color      = !isLogin ? '#fff' : 'var(--text-muted)';
+  document.getElementById('authSubmitBtn').textContent    = isLogin ? '登录' : '注册';
+}
+
+async function submitAuth() {
+  const username = document.getElementById('authUsername').value.trim();
+  const password = document.getElementById('authPassword').value;
+  const errEl    = document.getElementById('authError');
+  errEl.textContent = '';
+
+  if (!username || !password) { errEl.textContent = '请填写用户名和密码'; return; }
+
+  const url = authTab === 'login' ? '/api/auth/login' : '/api/auth/register';
+  try {
+    const res  = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.error || '操作失败'; return; }
+
+    authToken    = data.token;
+    authUsername = data.username;
+    localStorage.setItem('xg_token',    authToken);
+    localStorage.setItem('xg_username', authUsername);
+
+    hideAuthModal();
+    initApp(); // 登录成功后初始化主应用
+  } catch {
+    errEl.textContent = '网络错误，请稍后重试';
+  }
+}
+
+function showAuthModal() {
+  const m = document.getElementById('authModal');
+  m.style.display = 'flex';
+}
+
+function hideAuthModal() {
+  document.getElementById('authModal').style.display = 'none';
+}
+
+function logout() {
+  localStorage.removeItem('xg_token');
+  localStorage.removeItem('xg_username');
+  localStorage.removeItem('xg_session_id');
+  location.reload();
+}
+
 // ─── 状态 ─────────────────────────────────────────────────────
-const socket = io();
+let socket = null;
 let sessionId = localStorage.getItem('xg_session_id');
 let identity = 'parent'; // parent | student
 let pendingFile = null;
@@ -1199,18 +1326,37 @@ const scenarioMap = {
 window.addEventListener('DOMContentLoaded', async () => {
   await checkHealth();
   await loadCourses();
-  await loadSessions(); // 加载会话列表
-  
-  if (!sessionId) {
-    await createNewSession();
+
+  if (!authToken) {
+    showAuthModal();
   } else {
-    await selectSession(sessionId);
+    initApp();
   }
 });
 
+function initApp() {
+  // 显示用户名
+  const unEl = document.getElementById('loggedInUser');
+  if (unEl) unEl.textContent = '👤 ' + authUsername;
+
+  // 带 JWT 初始化 Socket
+  socket = io({ auth: { token: authToken } });
+  bindSocketEvents();
+
+  // 加载会话
+  (async () => {
+    await loadSessions();
+    if (!sessionId) {
+      await createNewSession();
+    } else {
+      await selectSession(sessionId);
+    }
+  })();
+}
+
 async function loadSessions() {
   try {
-    const res = await fetch('/api/sessions');
+    const res = await authFetch('/api/sessions');
     const data = await res.json();
     const historyEl = document.getElementById('sessionHistory');
     
@@ -1236,7 +1382,7 @@ async function loadSessions() {
 
 async function createNewSession() {
   try {
-    const res = await fetch('/api/sessions', { method: 'POST' });
+    const res = await authFetch('/api/sessions', { method: 'POST' });
     const data = await res.json();
     sessionId = data.id;
     localStorage.setItem('xg_session_id', sessionId);
@@ -1269,7 +1415,7 @@ async function selectSession(id) {
   msgs.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted); font-size:12px">加载中...</div>';
   
   try {
-    const res = await fetch(`/api/sessions/${id}`);
+    const res = await authFetch(`/api/sessions/${id}`);
     const data = await res.json();
     
     msgs.innerHTML = `
@@ -1333,7 +1479,9 @@ async function loadCourses() {
   } catch {}
 }
 
-// ─── Socket 事件 ──────────────────────────────────────────────
+// ─── Socket 事件（在 initApp 中调用） ─────────────────────────
+function bindSocketEvents() {
+
 socket.on('agent_step', ({ step, status, label, data }) => {
   updateStep(step, status, label, data);
 });
@@ -1375,6 +1523,8 @@ socket.on('response', async (result) => {
   }
   resetSteps();
 });
+
+} // end bindSocketEvents
 
 // ─── 发送消息 ─────────────────────────────────────────────────
 function sendMessage() {

@@ -27,6 +27,12 @@ module.exports = {
   // 服务端口
   PORT: process.env.PORT || 3000,
 
+  // MongoDB 连接字符串
+  MONGODB_URI: process.env.MONGODB_URI || '',
+
+  // JWT 签名密钥（生产环境请设为随机长字符串）
+  JWT_SECRET: process.env.JWT_SECRET || 'xingguang_edu_secret_2024',
+
   // ──────────────────────────────────────────────────────────
   //  DeepSeek API 参数
   // ──────────────────────────────────────────────────────────
