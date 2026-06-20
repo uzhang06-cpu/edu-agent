@@ -1017,8 +1017,8 @@
 
     .suggestions-container {
       position: relative;
-      display: inline-block;
-      width: 100%;
+      flex: 1;
+      min-width: 0;
     }
 
     .suggestions-dropdown {
@@ -1717,9 +1717,11 @@ async function selectSession(id) {
     if (data.messages && data.messages.length > 0) {
       data.messages.forEach(m => {
         if (m.role === 'user') {
-          addUserMessage(m.content, null, false); // 不自动滚动
+          addUserMessage(m.content, null, false);
         } else {
-          addBotMessage(m.content, null, false);
+          // 还原原始的段落拆分逻辑，避免多段内容合成一个大气泡
+          const chunks = m.content.split(/\n\s*\n/).filter(c => c.trim());
+          chunks.forEach((chunk, i) => addBotMessage(chunk, i === 0 ? null : null, false));
         }
       });
     }
