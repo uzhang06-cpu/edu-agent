@@ -241,26 +241,29 @@
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 18px;
+      gap: 22px;
       min-height: 0;
     }
 
-    /* 侧栏子区块 */
-    .sb-group { flex-shrink: 0; }
-    .sb-group-history {
+    /* 侧栏子区块：自然高度，整个侧栏作为单一滚动容器 */
+    .sb-group {
+      flex-shrink: 0;
       display: flex;
       flex-direction: column;
-      min-height: 0;
-      max-height: 38vh; /* 历史长时自己滚，不挤占课程/场景区 */
-      flex-shrink: 1;
     }
-    .sb-scroll {
+    /* 区块之间的细分隔线，提升可扫读性 */
+    .sb-group + .sb-group {
+      border-top: 1px dashed var(--border);
+      padding-top: 22px;
+      margin-top: -4px;
+    }
+    /* 历史会话本身：限制最多显示 ~5 条，超出在自己内部滚动 */
+    #sessionHistory {
+      max-height: 200px;
       overflow-y: auto;
-      flex: 1;
-      min-height: 0;
     }
-    .sb-scroll::-webkit-scrollbar { width: 3px; }
-    .sb-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+    #sessionHistory::-webkit-scrollbar { width: 3px; }
+    #sessionHistory::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
 
     .sidebar-section::-webkit-scrollbar { width: 3px; }
     .sidebar-section::-webkit-scrollbar-track { background: transparent; }
@@ -1368,10 +1371,10 @@
     </div>
 
       <div class="sidebar-section">
-        <!-- 咨询记录：限高 + 自滚，避免把后面区块挤出视野 -->
-        <div class="sb-group sb-group-history">
+        <!-- 咨询记录 -->
+        <div class="sb-group">
           <div class="section-title"><svg class="icon icon-sm"><use href="#i-clock"/></svg> 咨询记录</div>
-          <div id="sessionHistory" class="sb-scroll">
+          <div id="sessionHistory">
             <!-- 动态加载历史会话 -->
             <div style="padding:10px; font-size:11px; color:var(--text-muted); text-align:center">暂无记录</div>
           </div>
