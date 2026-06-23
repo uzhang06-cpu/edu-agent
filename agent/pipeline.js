@@ -394,6 +394,7 @@ function extractToolArgs(toolName, message, perception) {
       subject: extractSubject(message),
       currentLevel: message.includes('基础差') || message.includes('薄弱') ? 'poor' : 'medium'
     }),
+    web_search: () => ({ query: extractSearchQuery(message), num: 5 }),
   };
   return (argMap[toolName] || (() => ({})))();
 }
@@ -411,6 +412,16 @@ function extractSubject(msg) {
 function extractOrderId(msg) {
   const match = msg.match(/XG\d{9,}/);
   return match ? match[0] : '';
+}
+
+/** 抽取搜索关键词：去掉口语开头 + 标点，截断到合理长度 */
+function extractSearchQuery(msg) {
+  return String(msg || '')
+    .replace(/^(请|帮我|麻烦|能否|可以|想|我想|我要|帮忙|请问)\s*/g, '')
+    .replace(/[？?。！!，,；;]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 80);
 }
 
 module.exports = { runAgent };

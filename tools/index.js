@@ -169,6 +169,19 @@ const TOOLS = [
     }
   },
 
+  // ── 8. Web 搜索（多引擎兜底） ──────────────────────────────────
+  {
+    name: 'web_search',
+    label: '联网搜索',
+    description: '当用户问到时效性强、超出本地知识库范围、需要最新政策/资讯时，使用此工具联网搜索。引擎自动兜底：DuckDuckGo → Tavily → Bing API → Bing 爬虫',
+    params: { query: '搜索关键词（精炼，去除"请帮我查"等无意义词）', num: '返回结果数（默认 5）' },
+    enabled: true,
+    execute: async ({ query, num }) => {
+      const { webSearch } = require('../services/web-search');
+      return await webSearch({ query, num: Number(num) || 5 });
+    }
+  },
+
 ];
 
 // ════════════════════════════════════════════════════════════════

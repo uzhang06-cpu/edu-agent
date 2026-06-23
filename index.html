@@ -1753,6 +1753,7 @@ let socket = null;
 let sessionId = localStorage.getItem('xg_session_id');
 let identity = 'parent'; // parent | student
 let pendingFile = null;
+let pendingFileContent = null;
 let isLoading = false;
 let emojiPickerOpen = false;
 
@@ -2054,12 +2055,14 @@ function sendMessage() {
     message: message || '[发送了文件]',
     sessionId,
     fileName: pendingFile?.name,
-    fileType: pendingFile?.type
+    fileType: pendingFile?.type,
+    fileContent: pendingFileContent || null
   });
 
   input.value = '';
   autoResize(input);
   pendingFile = null;
+  pendingFileContent = null;
   document.getElementById('filePreview').style.display = 'none';
   // 重置 file input，否则同一文件不能连续上传
   const fileInputEl = document.getElementById('fileInput');
@@ -2246,19 +2249,39 @@ function updateAnalysis(result) {
 }
 
 // ─── 文件处理 ─────────────────────────────────────────────────
-function handleFileSelect(input) {
+async function handleFileSelect(input) {
   const file = input.files[0];
   if (!file) return;
+
   pendingFile = file;
+  pendingFileContent = null;
   document.getElementById('filePreviewIcon').textContent = getFileIcon(file.name);
-  document.getElementById('filePreviewName').textContent = `${file.name} (${(file.size/1024).toFixed(1)}KB)`;
+  const previewName = document.getElementById('filePreviewName');
+  previewName.textContent = `${file.name} (${(file.size/1024).toFixed(1)}KB) · 解析中…`;
   document.getElementById('filePreview').style.display = 'flex';
   input.value = '';
+  updateSendBtnState();
+
+  // 立即上传并解析
+  try {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await authFetch('/api/upload', { method: 'POST', body: form });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    pendingFileContent = data.text || '';
+    const charCount = pendingFileContent.length;
+    previewName.textContent = `${file.name} (${(file.size/1024).toFixed(1)}KB) · 已解析 ${charCount} 字${data.pages ? ' / ' + data.pages + '页' : ''}`;
+  } catch (err) {
+    console.error('[upload]', err);
+    previewName.textContent = `${file.name} · 解析失败（仍可发送文件名）`;
+  }
   updateSendBtnState();
 }
 
 function removeFile() {
   pendingFile = null;
+  pendingFileContent = null;
   document.getElementById('filePreview').style.display = 'none';
   const fileInputEl = document.getElementById('fileInput');
   if (fileInputEl) fileInputEl.value = '';

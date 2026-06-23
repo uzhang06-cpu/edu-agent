@@ -124,6 +124,33 @@ app.delete('/api/sessions/:id', authMiddleware, async (req, res) => {
   }
 });
 
+// ════════════════════════════════════════════════════════════════
+//  文件上传 & 解析（PDF / DOCX / XLSX / 图片 OCR / TXT）
+// ════════════════════════════════════════════════════════════════
+const multer = require('multer');
+const { parseFile } = require('./services/document-parser');
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+});
+
+app.post('/api/upload', authMiddleware, upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: '未收到文件' });
+  try {
+    const parsed = await parseFile(req.file);
+    res.json({
+      ok: true,
+      fileName: req.file.originalname,
+      fileSize: req.file.size,
+      mime: req.file.mimetype,
+      ...parsed
+    });
+  } catch (err) {
+    console.error('[upload]', err);
+    res.status(500).json({ error: '文件解析失败: ' + err.message });
+  }
+});
+
 // ── 知识库 / 技能 / 工具 / 工作流 ───────────────────────────────
 app.use('/api/knowledge', knowledge.router);
 app.use('/api/skills',    skillsRouter);
@@ -153,7 +180,7 @@ io.on('connection', (socket) => {
   console.log(`[Socket] 连接: ${socket.id} | 用户: ${socket.user?.username}`);
 
   // ── 收到用户消息 ────────────────────────────────────────────
-  socket.on('chat', async ({ message, sessionId, identity: msgIdentity, fileName }) => {
+  socket.on('chat', async ({ message, sessionId, identity: msgIdentity, fileName, fileContent }) => {
     console.log(`[Chat] User:${socket.user.username} Session:${sessionId} | ${message?.slice(0, 40)}`);
 
     // 加载会话（验证归属）
@@ -163,7 +190,16 @@ io.on('connection', (socket) => {
     }
 
     const history = session.messages.map(m => ({ role: m.role, content: m.content }));
-    const fullMessage = fileName ? `${message || ''}（用户上传了文件：${fileName}）` : message;
+
+    // 拼接：消息正文 +（可选）已解析的文件内容
+    let fullMessage = message || '';
+    if (fileName) {
+      fullMessage += (fullMessage ? '\n\n' : '') + `[用户上传文件：${fileName}]`;
+      if (fileContent) {
+        fullMessage += `\n以下是文件内容（已自动解析为文本）：\n"""\n${fileContent}\n"""`;
+      }
+    }
+
     const identity = msgIdentity || 'parent';
 
     const result = await runAgent({ socket, message: fullMessage, history, summary: session.summary, identity });
