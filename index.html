@@ -117,6 +117,21 @@
     ══════════════════════════════════════════════════════════ */
     *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+    /* Lucide-style SVG 图标统一类 */
+    .icon {
+      width: 1em;
+      height: 1em;
+      display: inline-block;
+      vertical-align: -0.15em;
+      flex-shrink: 0;
+      stroke: currentColor;
+      fill: none;
+    }
+    .icon-sm { width: 14px; height: 14px; }
+    .icon-md { width: 16px; height: 16px; }
+    .icon-lg { width: 20px; height: 20px; }
+    .icon-xl { width: 22px; height: 22px; }
+
     body {
       background: var(--ink);
       color: var(--text-primary);
@@ -540,7 +555,10 @@
     .message.bot .msg-avatar {
       background: linear-gradient(135deg, #10b981 0%, #0ea5e9 100%);
       box-shadow: 0 2px 8px rgba(16,185,129,0.25);
+      color: #fff;
     }
+
+    .agent-avatar { color: #fff; }
 
     .msg-content {
       display: flex;
@@ -1303,6 +1321,30 @@
 </head>
 <body>
 
+<!-- ══════════════════════════════════════════════════════════
+     SVG 图标 sprite（Lucide-style，1.75 stroke）
+     用法：<svg class="icon"><use href="#i-send"/></svg>
+══════════════════════════════════════════════════════════ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- 通用样式：stroke=currentColor, fill=none, stroke-linecap=round -->
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.27 6.96 8.73 5.05 8.73-5.05"/><path d="M12 22.08V12"/></symbol>
+    <symbol id="i-bulb" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+    <symbol id="i-brain" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/></symbol>
+    <symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+    <symbol id="i-smile" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></symbol>
+    <symbol id="i-paperclip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 17.93 8.8l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16V9"/><path d="M12 16v-5"/><path d="M17 16v-3"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  </defs>
+</svg>
+
 <div class="api-warning" id="apiWarning">
   ⚠️ DeepSeek API Key 未配置！请在 <code>.env</code> 文件中设置 <code>DEEPSEEK_API_KEY</code>，然后重启服务器。
 </div>
@@ -1328,19 +1370,19 @@
       <div class="sidebar-section">
         <!-- 咨询记录：限高 + 自滚，避免把后面区块挤出视野 -->
         <div class="sb-group sb-group-history">
-          <div class="section-title">🕒 咨询记录</div>
+          <div class="section-title"><svg class="icon icon-sm"><use href="#i-clock"/></svg> 咨询记录</div>
           <div id="sessionHistory" class="sb-scroll">
             <!-- 动态加载历史会话 -->
             <div style="padding:10px; font-size:11px; color:var(--text-muted); text-align:center">暂无记录</div>
           </div>
           <button class="header-btn" style="width:100%; margin-top:10px; border-style:dashed; border-color:var(--gold)" onclick="createNewSession()">
-            ➕ 开启新咨询
+            <svg class="icon icon-sm"><use href="#i-plus"/></svg> 开启新咨询
           </button>
         </div>
 
         <!-- 课程套餐：始终可见 -->
         <div class="sb-group">
-          <div class="section-title">📦 课程套餐</div>
+          <div class="section-title"><svg class="icon icon-sm"><use href="#i-package"/></svg> 课程套餐</div>
           <div id="courseList">
             <!-- 动态加载 -->
           </div>
@@ -1348,7 +1390,7 @@
 
         <!-- 场景识别 -->
         <div class="sb-group">
-          <div class="section-title">💡 场景识别</div>
+          <div class="section-title"><svg class="icon icon-sm"><use href="#i-bulb"/></svg> 场景识别</div>
           <div style="font-size:11px; color:var(--text-muted); line-height:1.8; padding:0 8px">
             <div>📚 <span style="color:var(--gold)">课程咨询</span> — 套餐/价格/权益</div>
             <div>🎓 <span style="color:var(--jade)">专业问题</span> — 学术/课程疑问</div>
@@ -1359,7 +1401,7 @@
       </div>
 
     <div class="quick-questions">
-      <div class="section-title">⚡ 快捷提问</div>
+      <div class="section-title"><svg class="icon icon-sm"><use href="#i-zap"/></svg> 快捷提问</div>
       <button class="quick-btn" onclick="quickSend('请问你们有什么课程套餐？价格是多少？')">💰 课程套餐和价格</button>
       <button class="quick-btn" onclick="quickSend('我孩子数学基础很差，应该怎么学？')">📐 数学学习方法</button>
       <button class="quick-btn" onclick="quickSend('我已经付款了但还没收到课程资料，太气了！')">😤 权益问题反馈</button>
@@ -1371,15 +1413,15 @@
   <main class="chat-main">
     <header class="chat-header">
       <div class="chat-header-left">
-        <div class="agent-avatar">🤖</div>
+        <div class="agent-avatar"><svg class="icon" style="width:22px;height:22px"><use href="#i-bot"/></svg></div>
         <div class="agent-info">
           <h2>星小助 · AI 运营助手</h2>
           <p>感知 → 规划 → 执行 → 复盘 → 定论</p>
         </div>
       </div>
       <div class="header-actions">
-        <button class="header-btn" onclick="clearHistory()">🗑️ 清空对话</button>
-        <button class="header-btn" id="themeToggle" onclick="toggleTheme()">🌙 暗色模式</button>
+        <button class="header-btn" onclick="clearHistory()"><svg class="icon icon-sm"><use href="#i-x"/></svg> 清空对话</button>
+        <button class="header-btn" id="themeToggle" onclick="toggleTheme()"><svg class="icon icon-sm" id="themeIcon"><use href="#i-moon"/></svg> <span id="themeLabel">暗色模式</span></button>
       </div>
     </header>
 
@@ -1423,9 +1465,9 @@
       </div>
       <div class="input-wrapper">
         <div class="input-actions-left">
-          <button class="input-btn" data-emoji-toggle onclick="toggleEmoji()" type="button" aria-label="插入表情" title="表情">😊</button>
+          <button class="input-btn" data-emoji-toggle onclick="toggleEmoji()" type="button" aria-label="插入表情" title="表情"><svg class="icon icon-lg"><use href="#i-smile"/></svg></button>
           <label class="input-btn" title="上传文件" aria-label="上传文件" style="cursor:pointer">
-            📎
+            <svg class="icon icon-lg"><use href="#i-paperclip"/></svg>
             <input type="file" id="fileInput" style="display:none"
               accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.txt,.xlsx,.csv"
               onchange="handleFileSelect(this)">
@@ -1442,7 +1484,7 @@
           <div class="suggestions-dropdown" id="suggestionsDropdown"></div>
         </div>
         <button class="send-btn" id="sendBtn" onclick="sendMessage()" type="button" aria-label="发送消息" title="发送" disabled>
-          ➤
+          <svg class="icon icon-lg"><use href="#i-send"/></svg>
         </button>
       </div>
     </div>
@@ -1451,7 +1493,7 @@
   <!-- ══ 右侧 Agent 思维面板 ══ -->
   <aside class="agent-panel">
     <div class="panel-header">
-      <div class="panel-title">🧠 Agent 思维链</div>
+      <div class="panel-title"><svg class="icon icon-md"><use href="#i-brain"/></svg> Agent 思维链</div>
       <div class="panel-sub">实时展示 AI 决策过程</div>
     </div>
     <div class="panel-content">
@@ -1520,7 +1562,7 @@
       </div>
 
       <div style="margin-top:16px">
-        <div class="section-title" style="padding:0;margin-bottom:8px">📊 本次分析</div>
+        <div class="section-title" style="padding:0;margin-bottom:8px"><svg class="icon icon-sm"><use href="#i-chart"/></svg> 本次分析</div>
         <div id="analysisDetail" style="font-size:11px; color:var(--text-muted); line-height:2">
           <span style="color:var(--text-muted)">等待用户发送消息...</span>
         </div>
@@ -1976,7 +2018,7 @@ function addBotMessage(text, perception, shouldScroll = true) {
   const div = document.createElement('div');
   div.className = 'message bot';
   div.innerHTML = `
-    <div class="msg-avatar">🤖</div>
+    <div class="msg-avatar bot-avatar"><svg class="icon icon-lg"><use href="#i-bot"/></svg></div>
     <div class="msg-content">
       ${badge ? `<span class="scenario-badge ${badge.class}">${badge.label}</span>` : ''}
       <div class="msg-bubble">${formatBotText(text)}</div>
@@ -1993,7 +2035,7 @@ function addTypingIndicator() {
   div.id = 'typingIndicator';
   div.className = 'message bot';
   div.innerHTML = `
-    <div class="msg-avatar">🤖</div>
+    <div class="msg-avatar bot-avatar"><svg class="icon icon-lg"><use href="#i-bot"/></svg></div>
     <div class="typing-indicator">
       <div class="dots">
         <div class="dot"></div>
@@ -2167,24 +2209,25 @@ function toggleTheme() {
   const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
 
   html.setAttribute('data-theme', newTheme);
-
-  const btn = document.getElementById('themeToggle');
-  btn.textContent = newTheme === 'dark' ? '☀️ 亮色模式' : '🌙 暗色模式';
+  applyThemeButton(newTheme);
 
   // 保存偏好到localStorage
   localStorage.setItem('theme', newTheme);
 }
 
+function applyThemeButton(theme) {
+  const iconUse = document.querySelector('#themeIcon use');
+  const label = document.getElementById('themeLabel');
+  if (iconUse) iconUse.setAttribute('href', theme === 'dark' ? '#i-sun' : '#i-moon');
+  if (label) label.textContent = theme === 'dark' ? '亮色模式' : '暗色模式';
+}
+
 // 初始化主题
 (function initTheme() {
   const savedTheme = localStorage.getItem('theme') || 'light';
-  const html = document.documentElement;
-  html.setAttribute('data-theme', savedTheme);
-
-  const btn = document.getElementById('themeToggle');
-  if (btn) {
-    btn.textContent = savedTheme === 'dark' ? '☀️ 亮色模式' : '🌙 暗色模式';
-  }
+  document.documentElement.setAttribute('data-theme', savedTheme);
+  // 按钮在 DOMContentLoaded 之前可能还没渲染，等下一帧再同步
+  requestAnimationFrame(() => applyThemeButton(savedTheme));
 })();
 
 // ─── 搜索建议 ─────────────────────────────────────────────────
