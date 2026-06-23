@@ -224,7 +224,28 @@
       padding: 16px 14px;
       flex: 1;
       overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      min-height: 0;
     }
+
+    /* 侧栏子区块 */
+    .sb-group { flex-shrink: 0; }
+    .sb-group-history {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      max-height: 38vh; /* 历史长时自己滚，不挤占课程/场景区 */
+      flex-shrink: 1;
+    }
+    .sb-scroll {
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+    }
+    .sb-scroll::-webkit-scrollbar { width: 3px; }
+    .sb-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
 
     .sidebar-section::-webkit-scrollbar { width: 3px; }
     .sidebar-section::-webkit-scrollbar-track { background: transparent; }
@@ -625,7 +646,7 @@
       border-radius: 14px;
       padding: 10px 14px;
       display: flex;
-      align-items: flex-end;
+      align-items: center;
       gap: 10px;
       transition: border-color 0.18s, box-shadow 0.18s;
       box-shadow: var(--shadow-xs);
@@ -663,11 +684,12 @@
 
     textarea#messageInput {
       flex: 1;
+      width: 100%;
       background: none;
       border: none;
       outline: none;
       color: var(--text-primary);
-      font-size: 13.5px;
+      font-size: 15px;
       font-family: inherit;
       resize: none;
       min-height: 22px;
@@ -677,6 +699,11 @@
     }
 
     textarea#messageInput::placeholder { color: var(--text-muted); }
+
+    /* iOS 防止 font-size < 16px 时聚焦自动放大；桌面端用 15px 仍然舒适 */
+    @media (max-width: 640px) {
+      textarea#messageInput { font-size: 16px; }
+    }
 
     .send-btn {
       background: var(--gold);
@@ -689,16 +716,29 @@
       flex-shrink: 0;
       color: #ffffff;
       font-size: 15px;
-      box-shadow: 0 3px 10px rgba(79,110,247,0.35);
+      box-shadow: 0 3px 10px var(--gold-glow);
     }
 
-    .send-btn:hover {
+    .send-btn:hover:not(:disabled) {
       transform: translateY(-1px) scale(1.03);
-      box-shadow: 0 5px 16px rgba(79,110,247,0.4);
+      box-shadow: 0 5px 16px var(--gold-glow);
     }
 
-    .send-btn:active { transform: scale(0.96); box-shadow: none; }
-    .send-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
+    .send-btn:active:not(:disabled) { transform: scale(0.96); box-shadow: none; }
+
+    .send-btn:disabled {
+      background: var(--ink-3);
+      color: var(--text-muted);
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+      opacity: 1;
+    }
+
+    .send-btn:focus-visible {
+      outline: 2px solid var(--gold);
+      outline-offset: 2px;
+    }
 
     /* ══════════════════════════════════════════════════════════
        右侧 Agent 面板
@@ -1019,11 +1059,12 @@
       position: relative;
       flex: 1;
       min-width: 0;
+      display: flex;
     }
 
     .suggestions-dropdown {
       position: absolute;
-      bottom: 100%;
+      bottom: calc(100% + 8px);
       left: 0; right: 0;
       background: var(--ink-2);
       border: 1px solid var(--border);
@@ -1285,28 +1326,37 @@
     </div>
 
       <div class="sidebar-section">
-        <div class="section-title">🕒 咨询记录</div>
-        <div id="sessionHistory">
-          <!-- 动态加载历史会话 -->
-          <div style="padding:10px; font-size:11px; color:var(--text-muted); text-align:center">暂无记录</div>
+        <!-- 咨询记录：限高 + 自滚，避免把后面区块挤出视野 -->
+        <div class="sb-group sb-group-history">
+          <div class="section-title">🕒 咨询记录</div>
+          <div id="sessionHistory" class="sb-scroll">
+            <!-- 动态加载历史会话 -->
+            <div style="padding:10px; font-size:11px; color:var(--text-muted); text-align:center">暂无记录</div>
+          </div>
+          <button class="header-btn" style="width:100%; margin-top:10px; border-style:dashed; border-color:var(--gold)" onclick="createNewSession()">
+            ➕ 开启新咨询
+          </button>
         </div>
-        <button class="header-btn" style="width:100%; margin-top:10px; border-style:dashed; border-color:var(--gold)" onclick="createNewSession()">
-          ➕ 开启新咨询
-        </button>
 
-        <div class="section-title" style="margin-top:20px">📦 课程套餐</div>
-      <div id="courseList">
-        <!-- 动态加载 -->
-      </div>
+        <!-- 课程套餐：始终可见 -->
+        <div class="sb-group">
+          <div class="section-title">📦 课程套餐</div>
+          <div id="courseList">
+            <!-- 动态加载 -->
+          </div>
+        </div>
 
-      <div class="section-title" style="margin-top:20px">💡 场景识别</div>
-      <div style="font-size:11px; color:var(--text-muted); line-height:1.8; padding:0 8px">
-        <div>📚 <span style="color:var(--gold)">课程咨询</span> — 套餐/价格/权益</div>
-        <div>🎓 <span style="color:var(--jade)">专业问题</span> — 学术/课程疑问</div>
-        <div>💬 <span style="color:var(--rose)">投诉维权</span> — 诉求/牢骚处理</div>
-        <div>☕ <span style="color:var(--sky)">闲聊互动</span> — 轻松日常对话</div>
+        <!-- 场景识别 -->
+        <div class="sb-group">
+          <div class="section-title">💡 场景识别</div>
+          <div style="font-size:11px; color:var(--text-muted); line-height:1.8; padding:0 8px">
+            <div>📚 <span style="color:var(--gold)">课程咨询</span> — 套餐/价格/权益</div>
+            <div>🎓 <span style="color:var(--jade)">专业问题</span> — 学术/课程疑问</div>
+            <div>💬 <span style="color:var(--rose)">投诉维权</span> — 诉求/牢骚处理</div>
+            <div>☕ <span style="color:var(--sky)">闲聊互动</span> — 轻松日常对话</div>
+          </div>
+        </div>
       </div>
-    </div>
 
     <div class="quick-questions">
       <div class="section-title">⚡ 快捷提问</div>
@@ -1373,8 +1423,8 @@
       </div>
       <div class="input-wrapper">
         <div class="input-actions-left">
-          <button class="input-btn" onclick="toggleEmoji()" title="表情">😊</button>
-          <label class="input-btn" title="上传文件" style="cursor:pointer">
+          <button class="input-btn" data-emoji-toggle onclick="toggleEmoji()" type="button" aria-label="插入表情" title="表情">😊</button>
+          <label class="input-btn" title="上传文件" aria-label="上传文件" style="cursor:pointer">
             📎
             <input type="file" id="fileInput" style="display:none"
               accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.txt,.xlsx,.csv"
@@ -1383,13 +1433,15 @@
         </div>
         <div class="suggestions-container">
           <textarea id="messageInput"
-            placeholder="输入消息... 支持文字、表情、文件"
+            placeholder="输入消息…"
             rows="1"
+            aria-label="消息输入框"
             onkeydown="handleKeydown(event)"
-            oninput="handleInputSuggest(event)"></textarea>
+            oninput="handleInputSuggest(event)"
+            onpaste="setTimeout(() => { autoResize(this); updateSendBtnState(); }, 0)"></textarea>
           <div class="suggestions-dropdown" id="suggestionsDropdown"></div>
         </div>
-        <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="发送">
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()" type="button" aria-label="发送消息" title="发送" disabled>
           ➤
         </button>
       </div>
@@ -1754,10 +1806,17 @@ async function checkHealth() {
 }
 
 async function loadCourses() {
+  const list = document.getElementById('courseList');
+  if (!list) return;
+  list.innerHTML = `<div style="padding:10px; font-size:11px; color:var(--text-muted); text-align:center">加载中…</div>`;
   try {
     const res = await fetch('/api/courses');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    const list = document.getElementById('courseList');
+    if (!data.courses?.length) {
+      list.innerHTML = `<div style="padding:10px; font-size:11px; color:var(--text-muted); text-align:center">暂无课程</div>`;
+      return;
+    }
     list.innerHTML = data.courses.map(c => `
       <div class="course-card" onclick="prefillInput('请介绍一下${c.name}的详情和权益')">
         <div class="course-name">${c.name}</div>
@@ -1767,7 +1826,10 @@ async function loadCourses() {
         </ul>
       </div>
     `).join('');
-  } catch {}
+  } catch (err) {
+    console.error('[loadCourses]', err);
+    list.innerHTML = `<div style="padding:10px; font-size:11px; color:var(--rose); text-align:center">课程加载失败，请刷新重试</div>`;
+  }
 }
 
 // ─── Socket 事件（在 initApp 中调用） ─────────────────────────
@@ -1779,8 +1841,6 @@ socket.on('agent_step', ({ step, status, label, data }) => {
 
 socket.on('response', async (result) => {
   removeTypingIndicator();
-  isLoading = false;
-  document.getElementById('sendBtn').disabled = false;
 
   if (result.success && result.response) {
     updateEmotionCard(result.perception);
@@ -1799,7 +1859,7 @@ socket.on('response', async (result) => {
       if (i < chunks.length - 1) {
         // 延迟算法：基础延迟 800ms + 每字 20ms，上限 2.5s
         const delay = Math.min(800 + chunks[i].length * 20, 2500);
-        
+
         addTypingIndicator();
         await new Promise(r => setTimeout(r, delay));
         removeTypingIndicator();
@@ -1812,6 +1872,10 @@ socket.on('response', async (result) => {
       document.getElementById('apiWarning').classList.add('show');
     }
   }
+
+  // 所有分段输出完毕后再解锁输入，避免用户在 AI 还在"打字"时插话
+  isLoading = false;
+  updateSendBtnState();
   resetSteps();
 });
 
@@ -1825,7 +1889,7 @@ function sendMessage() {
 
   closeEmoji();
   isLoading = true;
-  document.getElementById('sendBtn').disabled = true;
+  updateSendBtnState();
 
   // 显示用户消息
   addUserMessage(message, pendingFile);
@@ -1846,6 +1910,10 @@ function sendMessage() {
   autoResize(input);
   pendingFile = null;
   document.getElementById('filePreview').style.display = 'none';
+  // 重置 file input，否则同一文件不能连续上传
+  const fileInputEl = document.getElementById('fileInput');
+  if (fileInputEl) fileInputEl.value = '';
+  updateSendBtnState();
 }
 
 function quickSend(msg) {
@@ -1859,13 +1927,25 @@ function prefillInput(msg) {
   input.value = msg;
   input.focus();
   autoResize(input);
+  updateSendBtnState();
 }
 
 function handleKeydown(e) {
+  // 中文输入法合成期间按 Enter 是选词，不应触发发送
+  if (e.isComposing || e.keyCode === 229) return;
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     sendMessage();
   }
+}
+
+// 根据输入内容和加载状态更新发送按钮可用性
+function updateSendBtnState() {
+  const input = document.getElementById('messageInput');
+  const btn = document.getElementById('sendBtn');
+  if (!input || !btn) return;
+  const hasContent = input.value.trim().length > 0 || !!pendingFile;
+  btn.disabled = isLoading || !hasContent;
 }
 
 // ─── 消息渲染 ─────────────────────────────────────────────────
@@ -2023,11 +2103,15 @@ function handleFileSelect(input) {
   document.getElementById('filePreviewName').textContent = `${file.name} (${(file.size/1024).toFixed(1)}KB)`;
   document.getElementById('filePreview').style.display = 'flex';
   input.value = '';
+  updateSendBtnState();
 }
 
 function removeFile() {
   pendingFile = null;
   document.getElementById('filePreview').style.display = 'none';
+  const fileInputEl = document.getElementById('fileInput');
+  if (fileInputEl) fileInputEl.value = '';
+  updateSendBtnState();
 }
 
 function getFileIcon(name) {
@@ -2050,13 +2134,21 @@ function closeEmoji() {
 
 function addEmoji(emoji) {
   const input = document.getElementById('messageInput');
-  input.value += emoji;
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? input.value.length;
+  input.value = input.value.slice(0, start) + emoji + input.value.slice(end);
+  // 把光标放到插入的表情之后
+  const caret = start + emoji.length;
+  input.setSelectionRange(caret, caret);
   input.focus();
+  autoResize(input);
+  updateSendBtnState();
   closeEmoji();
 }
 
 document.addEventListener('click', (e) => {
-  if (!e.target.closest('.emoji-picker') && !e.target.closest('.input-btn')) {
+  // 只有点击 emoji 触发按钮本身才不关闭；点击其他按钮（如附件）也应关闭表情面板
+  if (!e.target.closest('.emoji-picker') && !e.target.closest('[data-emoji-toggle]')) {
     closeEmoji();
   }
 });
@@ -2102,6 +2194,7 @@ let currentSuggestions = [];
 function handleInputSuggest(event) {
   // 保持自动调整高度
   autoResize(event.target);
+  updateSendBtnState();
 
   const query = event.target.value.trim();
   const dropdown = document.getElementById('suggestionsDropdown');
