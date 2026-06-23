@@ -265,6 +265,66 @@
     #sessionHistory::-webkit-scrollbar { width: 3px; }
     #sessionHistory::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
 
+    /* 会话历史条目 */
+    .session-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px;
+      margin-bottom: 4px;
+      border-radius: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .session-item:hover {
+      background: var(--card-hover);
+      border-color: var(--border-strong);
+    }
+    .session-item.active-session {
+      background: var(--gold-dim);
+      border-color: var(--gold);
+    }
+    .session-item-main {
+      flex: 1;
+      min-width: 0;
+    }
+    .session-item-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .session-item.active-session .session-item-title {
+      color: var(--gold);
+    }
+    .session-item-time {
+      font-size: 10px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    /* 删除按钮：默认半隐藏，hover 整条才显示，避免误触 */
+    .session-del {
+      flex-shrink: 0;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 4px;
+      border-radius: 6px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s, background 0.15s;
+    }
+    .session-item:hover .session-del,
+    .session-del:focus-visible { opacity: 1; }
+    .session-del:hover {
+      color: var(--rose);
+      background: var(--rose-dim);
+    }
+
     .sidebar-section::-webkit-scrollbar { width: 3px; }
     .sidebar-section::-webkit-scrollbar-track { background: transparent; }
     .sidebar-section::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
@@ -1742,18 +1802,47 @@ async function loadSessions() {
     }
 
     historyEl.innerHTML = data.sessions.map(s => `
-      <div class="course-card ${s.id === sessionId ? 'active-session' : ''}" 
-           style="padding:10px; margin-bottom:6px; border-radius:8px; position:relative; background:${s.id === sessionId ? 'var(--gold-dim)' : 'var(--card)'}; border-color:${s.id === sessionId ? 'var(--gold)' : 'var(--border)'}"
+      <div class="session-item ${s.id === sessionId ? 'active-session' : ''}"
            onclick="selectSession('${s.id}')">
-        <div style="font-size:12px; font-weight:600; color:${s.id === sessionId ? 'var(--gold)' : 'var(--text-primary)'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">
-          ${s.id === sessionId ? '🟢 ' : ''}${s.title || '未命名咨询'}
+        <div class="session-item-main">
+          <div class="session-item-title">
+            ${s.id === sessionId ? '🟢 ' : ''}${escapeHtml(s.title || '未命名咨询')}
+          </div>
+          <div class="session-item-time">
+            ${new Date(s.lastUpdate).toLocaleDateString()} ${new Date(s.lastUpdate).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+          </div>
         </div>
-        <div style="font-size:10px; color:var(--text-muted); margin-top:2px">
-          ${new Date(s.lastUpdate).toLocaleDateString()} ${new Date(s.lastUpdate).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-        </div>
+        <button class="session-del" type="button" aria-label="删除该咨询" title="删除"
+                onclick="event.stopPropagation(); deleteSession('${s.id}', this)">
+          <svg class="icon icon-sm"><use href="#i-x"/></svg>
+        </button>
       </div>
     `).join('');
   } catch (e) { console.error('Load sessions error:', e); }
+}
+
+async function deleteSession(id, btn) {
+  if (!confirm('删除这条咨询记录？此操作不可恢复。')) return;
+  if (btn) btn.disabled = true;
+  try {
+    const res = await authFetch(`/api/sessions/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'HTTP ' + res.status);
+    }
+    // 如果删的是当前会话，重置并新建
+    if (id === sessionId) {
+      sessionId = null;
+      localStorage.removeItem('xg_session_id');
+      await createNewSession();
+    } else {
+      await loadSessions();
+    }
+  } catch (err) {
+    console.error('[deleteSession]', err);
+    alert('删除失败：' + err.message);
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function createNewSession() {

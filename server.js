@@ -113,6 +113,17 @@ app.get('/api/sessions/:id', authMiddleware, async (req, res) => {
   }
 });
 
+/** DELETE /api/sessions/:id — 删除当前用户的某次会话 */
+app.delete('/api/sessions/:id', authMiddleware, async (req, res) => {
+  try {
+    const result = await Session.deleteOne({ _id: req.params.id, userId: req.user.userId });
+    if (result.deletedCount === 0) return res.status(404).json({ error: 'Session not found' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: '删除会话失败' });
+  }
+});
+
 // ── 知识库 / 技能 / 工具 / 工作流 ───────────────────────────────
 app.use('/api/knowledge', knowledge.router);
 app.use('/api/skills',    skillsRouter);
