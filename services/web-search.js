@@ -1,12 +1,12 @@
 /**
  * services/web-search.js
  * ──────────────────────────────────────────────────────────────────
- *  Web 搜索：双通道
- *    1) 优先：Node→Python 调用 skills/multi-search/multi_search.py
- *       （多引擎兜底，原 skill: https://github.com/Nex-ZMH/Agent-websearch-skill）
- *    2) 回退：纯 Node 版 DuckDuckGo HTML 抓取（无 Python 依赖）
+ *  Web 搜索：三通道兜底
+ *    1) Tavily REST API（最稳，云 IP 不封；需 TAVILY_API_KEY，免费 1000/月）
+ *    2) Python skill multi_search.py（DDG → Bing 等多引擎）
+ *    3) 纯 Node DuckDuckGo HTML 抓取
  *
- *  设计原则：在生产环境（可能没装 Python）一样能跑
+ *  在生产环境（云 PaaS、无 Python、IP 受限）通过通道 1 保证可用
  * ──────────────────────────────────────────────────────────────────
  */
 
@@ -17,7 +17,36 @@ const axios     = require('axios');
 const SKILL_DIR  = path.join(__dirname, '..', 'skills', 'multi-search');
 const PYTHON_BIN = process.env.PYTHON_BIN || 'python';
 const PY_TIMEOUT = 15000;
-const HTTP_TIMEOUT = 8000;
+const HTTP_TIMEOUT = 10000;
+const TAVILY_KEY = process.env.TAVILY_API_KEY;
+
+// ── 通道 0：Tavily（最稳，云端友好） ─────────────────────────────
+async function tryTavily(query, num) {
+  if (!TAVILY_KEY) return { error: 'no_api_key' };
+  try {
+    const { data } = await axios.post(
+      'https://api.tavily.com/search',
+      {
+        api_key: TAVILY_KEY,
+        query,
+        search_depth: 'basic',
+        max_results: num,
+        include_answer: true,
+      },
+      { timeout: HTTP_TIMEOUT }
+    );
+    return {
+      engine_used: 'tavily',
+      query,
+      answer: data.answer || null,
+      results: (data.results || []).map(r => ({
+        title: r.title, url: r.url, snippet: r.content
+      })),
+    };
+  } catch (err) {
+    return { error: 'tavily_failed: ' + (err.response?.data?.error || err.message) };
+  }
+}
 
 // ── 通道 1：Python skill ─────────────────────────────────────────
 function tryPython(query, num) {
@@ -124,23 +153,37 @@ async function webSearch({ query, num = 5 }) {
   if (!query || !String(query).trim()) return { error: '搜索词为空' };
   const q = String(query).trim();
   const n = Math.min(Math.max(Number(num) || 5, 1), 10);
+  const tried = [];
 
-  // 通道 1：Python skill
+  // 通道 1：Tavily（云端最稳，需 key）
+  if (TAVILY_KEY) {
+    const tv = await tryTavily(q, n);
+    tried.push('tavily=' + (tv.error || 'ok'));
+    if (!tv.error && tv.results?.length) return normalize(tv, q, n);
+  }
+
+  // 通道 2：Python skill
   const py = await tryPython(q, n);
+  tried.push('python=' + (py.error || 'ok'));
   if (!py.error && (py.results?.length || py.answer)) {
     return normalize(py, q, n);
   }
-  // 记录 fallback 原因，便于排查
-  console.log(`[web_search] python channel unavailable (${py.error || 'empty'}), falling back to Node DDG`);
 
-  // 通道 2：Node DDG
+  // 通道 3：Node DDG HTML
   try {
     const ddg = await tryDuckDuckGoHTML(q, n);
+    tried.push('ddg_html=' + (ddg.results?.length ? 'ok' : 'empty'));
     if (ddg.results?.length) return normalize(ddg, q, n);
-    return { error: '所有搜索通道均无结果', query: q };
   } catch (err) {
-    return { error: `搜索失败: ${err.message}`, query: q };
+    tried.push('ddg_html=' + err.message);
   }
+
+  console.log(`[web_search] 所有通道失败：${tried.join(' | ')}`);
+  return {
+    error: `所有搜索通道均失败 (${tried.join(' | ')})`,
+    query: q,
+    hint: TAVILY_KEY ? '检查 Tavily 配额' : '建议设置 TAVILY_API_KEY 环境变量获取稳定搜索（免费 1000/月）'
+  };
 }
 
 function normalize(raw, q, n) {
