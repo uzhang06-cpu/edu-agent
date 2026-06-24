@@ -2,3 +2,10 @@ node_modules/
 .env
 sessions/
 *.log
+
+# Python skill 运行时产物
+__pycache__/
+*.pyc
+skills/multi-search/network_cache.json
+skills/multi-search/quota.json
+skills/multi-search/api_keys.json
