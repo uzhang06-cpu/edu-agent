@@ -95,14 +95,17 @@ async function runAgent({ socket, message, history, summary, identity }) {
 
 输出格式（JSON）：
 {
-  "scenario": "课程咨询|专业问题|投诉维权|闲聊",
+  "scenario": "课程咨询|专业问题|投诉维权|信息查询|闲聊",
   "emotion": "平静|好奇|焦虑|愤怒|满意|沮丧|开心",
   "emotion_intensity": 1-10的整数,
   "identity": "家长|学生|未知",
   "urgency": "高|中|低",
   "key_intents": ["意图1", "意图2"],
   "summary": "一句话总结用户核心诉求"
-}`;
+}
+
+判定规则：
+- "信息查询"：包含"搜索/检索/查一下/最新/今天/最近/新闻/动态/政策/排行/股价/汇率"等关键词，或问到我可能不掌握的实时/时效信息（人物近况、最新事件、最新数据）。优先于"闲聊"。`;
 
     const perceiveRaw = await callDeepSeek(
       [{ role: 'user', content: perceivePrompt }],
@@ -138,6 +141,13 @@ async function runAgent({ socket, message, history, summary, identity }) {
 对话摘要：${summary || '无'}
 可用工具：
 ${getEnabledToolsDesc()}
+
+工具选择重要规则：
+- 场景为"信息查询" → tools_to_use 必须包含 "web_search"
+- 用户消息含"搜索/检索/查一下/最新/今天/最近/新闻/动态/排行/股价/汇率/近期" → 强烈建议 "web_search"
+- 询问超出本地知识库的时效信息（人物近况、新政策、最近事件） → 必须 "web_search"
+- 课程/价格/教师/订单 → 用相应业务工具
+- 闲聊/纯情感共情 → 工具列表留空
 
 输出格式（JSON）：
 {

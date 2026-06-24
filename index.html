@@ -1132,6 +1132,7 @@
     .scenario-badge.course   { background: rgba(79,110,247,0.1);  color: var(--gold); }
     .scenario-badge.academic { background: rgba(16,185,129,0.1);  color: var(--jade); }
     .scenario-badge.complaint{ background: rgba(244,63,94,0.1);   color: var(--rose); }
+    .scenario-badge.search   { background: rgba(245,158,11,0.1);  color: var(--amber); }
     .scenario-badge.chat     { background: rgba(14,165,233,0.1);  color: var(--sky);  }
 
     /* ══════════════════════════════════════════════════════════
@@ -1771,6 +1772,7 @@ const scenarioMap = {
   '课程咨询': { class: 'course', label: '📦 课程咨询' },
   '专业问题': { class: 'academic', label: '🎓 专业问题' },
   '投诉维权': { class: 'complaint', label: '💬 投诉维权' },
+  '信息查询': { class: 'search', label: '🔍 信息查询' },
   '闲聊': { class: 'chat', label: '☕ 闲聊' }
 };
 
@@ -1998,11 +2000,10 @@ socket.on('response', async (result) => {
     updateEmotionCard(result.perception);
     updateAnalysis(result);
 
-    // ── 智能分段输出逻辑 ──
-    // 1. 按双换行（段落）拆分
-    let chunks = result.response.split(/\n\s*\n/).filter(c => c.trim());
+    // ── 智能分段输出 ──
+    const chunks = splitForBubbles(result.response);
 
-    // 2. 逐段显示，模拟人类打字节奏
+    // 逐段显示，模拟人类打字节奏
     for (let i = 0; i < chunks.length; i++) {
       // 仅第一段显示场景 Badge
       addBotMessage(chunks[i], i === 0 ? result.perception : null);
@@ -2544,6 +2545,46 @@ function formatBotText(text) {
 function autoResize(el) {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+// 把 AI 回复拆为合适数量的气泡：
+// - 丢弃纯分隔符段（---、===、***）
+// - 短段（<60 字）合并到下一段
+// - 总气泡数 ≤ 3，超出部分合并到最后一段
+function splitForBubbles(text) {
+  if (!text) return [''];
+  const SEPARATOR_RE = /^[\s\-=*_]{3,}$/;
+  const MIN_CHUNK = 60;
+  const MAX_BUBBLES = 3;
+
+  // 按双换行拆，去掉纯分隔符段
+  let parts = text.split(/\n\s*\n/)
+    .map(s => s.trim())
+    .filter(s => s && !SEPARATOR_RE.test(s));
+
+  // 合并：短段贴到下一段
+  const merged = [];
+  let buf = '';
+  for (const p of parts) {
+    buf = buf ? buf + '\n\n' + p : p;
+    if (buf.length >= MIN_CHUNK) {
+      merged.push(buf);
+      buf = '';
+    }
+  }
+  if (buf) {
+    // 若末尾还有 buf 且 merged 非空，把它并到最后一段
+    if (merged.length) merged[merged.length - 1] += '\n\n' + buf;
+    else merged.push(buf);
+  }
+
+  // 限制气泡总数
+  if (merged.length > MAX_BUBBLES) {
+    const head = merged.slice(0, MAX_BUBBLES - 1);
+    const tail = merged.slice(MAX_BUBBLES - 1).join('\n\n');
+    return [...head, tail];
+  }
+  return merged.length ? merged : [text];
 }
 </script>
 </body>
