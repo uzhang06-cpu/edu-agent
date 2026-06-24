@@ -179,7 +179,13 @@ ${getEnabledToolsDesc()}
     // 3a. 并行执行RAG检索和工具调用
     let ragContext = '';
     let toolResults = '';
-    const toolsToUse = plan?.tools_to_use || [];
+    let toolsToUse = plan?.tools_to_use || [];
+
+    // 防御：信息查询场景强制注入 web_search（LLM 有时漏写 tools_to_use 数组）
+    if (perception?.scenario === '信息查询' && !toolsToUse.includes('web_search')) {
+      toolsToUse = ['web_search', ...toolsToUse];
+      console.log('[plan] 信息查询场景，自动注入 web_search 工具');
+    }
 
     // 并行执行RAG检索
     const ragPromise = (async () => {
@@ -224,7 +230,17 @@ ${getEnabledToolsDesc()}
     }
 
     if (toolsToUse.length > 0) {
-      emit('execute', 'running', `工具调用完成 (${toolsToUse.length}个)`);
+      // 思维链汇报：每个工具的具体执行结果
+      const summary = toolResultsArray.map(({ toolName, success, result, error }) => {
+        if (!success) return `${toolName}❌${error || '失败'}`;
+        if (toolName === 'web_search') {
+          if (result?.error)   return `${toolName}❌${result.error}`;
+          const n = result?.count ?? (result?.results?.length || 0);
+          return `${toolName}✓ ${result?.engine || ''} ${n}条`;
+        }
+        return `${toolName}✓`;
+      }).join(' | ');
+      emit('execute', 'running', `工具：${summary}`);
 
       // 组合工具结果
       for (const { toolName, success, result, error } of toolResultsArray) {
