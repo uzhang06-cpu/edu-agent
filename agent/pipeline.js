@@ -181,10 +181,21 @@ ${getEnabledToolsDesc()}
     let toolResults = '';
     let toolsToUse = plan?.tools_to_use || [];
 
-    // 防御：信息查询场景强制注入 web_search（LLM 有时漏写 tools_to_use 数组）
-    if (perception?.scenario === '信息查询' && !toolsToUse.includes('web_search')) {
+    // ───────────────────────────────────────────────────────────
+    // 双保险：强制注入 web_search
+    //   1) 感知场景为"信息查询"
+    //   2) 消息文本包含明确搜索意图关键字（即便感知没判对）
+    // ───────────────────────────────────────────────────────────
+    const SEARCH_KEYWORDS = /搜索|检索|查一下|查一查|查询|最新|今天|今日|最近|近期|新闻|动态|政策|实时|目前|当前|股价|汇率|排行/;
+    const messageWantsSearch =
+      perception?.scenario === '信息查询' || SEARCH_KEYWORDS.test(message);
+
+    if (messageWantsSearch && !toolsToUse.includes('web_search')) {
       toolsToUse = ['web_search', ...toolsToUse];
-      console.log('[plan] 信息查询场景，自动注入 web_search 工具');
+      console.log('[plan] 检测到搜索意图，自动注入 web_search 工具', {
+        scenario: perception?.scenario,
+        matchedKeyword: SEARCH_KEYWORDS.test(message)
+      });
     }
 
     // 并行执行RAG检索
@@ -231,7 +242,7 @@ ${getEnabledToolsDesc()}
 
     if (toolsToUse.length > 0) {
       // 思维链汇报：每个工具的具体执行结果
-      const summary = toolResultsArray.map(({ toolName, success, result, error }) => {
+      var toolSummary = toolResultsArray.map(({ toolName, success, result, error }) => {
         if (!success) return `${toolName}❌${error || '失败'}`;
         if (toolName === 'web_search') {
           if (result?.error)   return `${toolName}❌${result.error}`;
@@ -240,7 +251,7 @@ ${getEnabledToolsDesc()}
         }
         return `${toolName}✓`;
       }).join(' | ');
-      emit('execute', 'running', `工具：${summary}`);
+      emit('execute', 'running', `工具：${toolSummary}`);
 
       // 组合工具结果
       for (const { toolName, success, result, error } of toolResultsArray) {
@@ -277,7 +288,15 @@ ${getEnabledToolsDesc()}
    - 能用一句话说清楚的，绝不分两句。`;
 
     const executeMessages = [
-      { role: 'system', content: systemPrompt + memoryPrompt + negativeConstraint + ragContext + (toolResults ? '\n\n[工具数据]\n' + toolResults : '') },
+      { role: 'system', content: buildExecuteSystem({
+          workflowSystemPrompt: systemPrompt,
+          memoryPrompt,
+          negativeConstraint,
+          ragContext,
+          toolResults,
+          hasWebSearch: toolsToUse.includes('web_search')
+        })
+      },
       ...history.slice(-10),  // 滑动窗口：保留最近10条（5轮）
       { role: 'user', content: message }
     ];
@@ -291,7 +310,7 @@ ${getEnabledToolsDesc()}
       .replace(/【[^】]*】/g, '')    // 移除方头括号内容
       .trim();
 
-    emit('execute', 'done', `回复已生成 (${response.length}字)`);
+    emit('execute', 'done', `回复已生成 (${response.length}字)` + (toolsToUse.length ? ` · 工具: ${toolSummary || toolsToUse.join(',')}` : ''));
 
     // ═══════════════════════════════════════════════════════════
     // STEP 4: 复盘（Review）
@@ -448,6 +467,44 @@ function extractSearchQuery(msg) {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 80);
+}
+
+/**
+ * 拼装 execute 步骤的 system prompt
+ *
+ * 关键设计：当工具数据存在（尤其是 web_search 命中）时，把工具数据放到
+ * 最顶部并加上"硬性 override"，让 LLM 无法用"知识截止/无法联网"做借口
+ */
+function buildExecuteSystem({
+  workflowSystemPrompt, memoryPrompt, negativeConstraint,
+  ragContext, toolResults, hasWebSearch
+}) {
+  const sections = [];
+
+  if (toolResults) {
+    if (hasWebSearch) {
+      sections.push(`【实时工具数据 — 最高优先级】
+以下内容是刚刚通过工具实时获取的，必须作为你回答的事实来源：
+
+${toolResults}
+
+回答硬性要求：
+1. 禁止说"我无法检索""我没法联网""请开启联网搜索""知识截止于…"等任何回避表达
+2. 必须基于上面的工具数据回答用户问题
+3. 如果工具数据是 web_search 结果，结合 title/snippet 用中文做简洁小结
+4. 末尾用"参考来源："列出 2-3 条真实链接（来自工具数据中的 url 字段）
+5. 不允许编造链接或来源`);
+    } else {
+      sections.push(`【工具数据】\n${toolResults}`);
+    }
+  }
+
+  sections.push(workflowSystemPrompt);
+  sections.push(memoryPrompt);
+  sections.push(negativeConstraint);
+  if (ragContext) sections.push(ragContext);
+
+  return sections.filter(Boolean).join('\n\n');
 }
 
 module.exports = { runAgent };
