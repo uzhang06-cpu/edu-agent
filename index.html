@@ -1993,6 +1993,36 @@ socket.on('agent_step', ({ step, status, label, data }) => {
   updateStep(step, status, label, data);
 });
 
+// P0-2: 流式输出增量渲染 —— 首次 delta 时创建气泡，后续追加
+let streamBubbleEl = null;
+let streamTextBuf  = '';
+let streamStartedAt = 0;
+
+socket.on('agent_delta', ({ delta }) => {
+  if (!delta) return;
+  if (!streamBubbleEl) {
+    // 首个字：移除 typing 指示，创建流式气泡
+    removeTypingIndicator();
+    streamStartedAt = Date.now();
+    const msgs = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = 'message bot';
+    div.innerHTML = `
+      <div class="msg-avatar bot-avatar"><svg class="icon icon-lg"><use href="#i-bot"/></svg></div>
+      <div class="msg-content">
+        <div class="msg-bubble" data-streaming="1"></div>
+        <div class="msg-time">${getTime()}</div>
+      </div>
+    `;
+    msgs.appendChild(div);
+    streamBubbleEl = div.querySelector('.msg-bubble');
+    scrollToBottom();
+  }
+  streamTextBuf += delta;
+  streamBubbleEl.innerHTML = formatBotText(streamTextBuf);
+  scrollToBottom();
+});
+
 socket.on('response', async (result) => {
   removeTypingIndicator();
 
@@ -2000,33 +2030,49 @@ socket.on('response', async (result) => {
     updateEmotionCard(result.perception);
     updateAnalysis(result);
 
-    // ── 智能分段输出 ──
-    const chunks = splitForBubbles(result.response);
-
-    // 逐段显示，模拟人类打字节奏
-    for (let i = 0; i < chunks.length; i++) {
-      // 仅第一段显示场景 Badge
-      addBotMessage(chunks[i], i === 0 ? result.perception : null);
-
-      // 如果还有下一段，显示"正在输入"并延迟
-      if (i < chunks.length - 1) {
-        // 延迟算法：基础延迟 800ms + 每字 20ms，上限 2.5s
-        const delay = Math.min(800 + chunks[i].length * 20, 2500);
-
-        addTypingIndicator();
-        await new Promise(r => setTimeout(r, delay));
-        removeTypingIndicator();
+    // 流式已经渲染过 → 用清洗后的完整文本替换气泡内容（避免残留旁白/前缀），
+    // 并补一个 scenario badge；不再走分段延迟播放
+    if (streamBubbleEl) {
+      streamBubbleEl.innerHTML = formatBotText(result.response);
+      streamBubbleEl.removeAttribute('data-streaming');
+      const scenario = result.perception?.scenario;
+      const badge = scenarioMap[scenario];
+      if (badge) {
+        const badgeEl = document.createElement('span');
+        badgeEl.className = `scenario-badge ${badge.class}`;
+        badgeEl.textContent = badge.label;
+        streamBubbleEl.parentElement.insertBefore(badgeEl, streamBubbleEl);
+      }
+      streamBubbleEl = null;
+      streamTextBuf  = '';
+    } else {
+      // 非流式回退路径（refine 后或 stream 失败）：走老分段渲染
+      const chunks = splitForBubbles(result.response);
+      for (let i = 0; i < chunks.length; i++) {
+        addBotMessage(chunks[i], i === 0 ? result.perception : null);
+        if (i < chunks.length - 1) {
+          const delay = Math.min(800 + chunks[i].length * 20, 2500);
+          addTypingIndicator();
+          await new Promise(r => setTimeout(r, delay));
+          removeTypingIndicator();
+        }
       }
     }
 
   } else {
+    // 出错：清理流式气泡
+    if (streamBubbleEl) {
+      streamBubbleEl.closest('.message.bot')?.remove();
+      streamBubbleEl = null;
+      streamTextBuf  = '';
+    }
     addBotMessage(result.response || '抱歉，遇到了点问题，请稍后再试 🙏', null);
     if (result.error === 'API_KEY_NOT_SET') {
       document.getElementById('apiWarning').classList.add('show');
     }
   }
 
-  // 所有分段输出完毕后再解锁输入，避免用户在 AI 还在"打字"时插话
+  // 所有分段输出完毕后再解锁输入
   isLoading = false;
   updateSendBtnState();
   resetSteps();

@@ -204,11 +204,12 @@ io.on('connection', (socket) => {
 
     const result = await runAgent({ socket, message: fullMessage, history, summary: session.summary, identity });
 
+    // 立即返回给前端 —— 摘要异步更新，不阻塞（P0-3）
+    socket.emit('response', result);
+
     if (result.success) {
       session.messages.push({ role: 'user',      content: fullMessage });
       session.messages.push({ role: 'assistant', content: result.response });
-
-      if (result.newSummary) session.summary = result.newSummary;
 
       if (session.title === '新咨询项目' && session.messages.length >= 2) {
         session.title = message.slice(0, 15) || '咨询会话';
@@ -221,9 +222,28 @@ io.on('connection', (socket) => {
 
       session.lastUpdate = new Date();
       await session.save();
-    }
 
-    socket.emit('response', result);
+      // ── 异步摘要更新（P0-3）：不阻塞用户
+      //    条件：每 3 轮更新一次（消息条数为 6, 12, 18 时触发）
+      const shouldUpdateSummary = typeof result.updateSummary === 'function'
+        && (session.messages.length % 6 === 0 || session.messages.length === 2);
+      if (shouldUpdateSummary) {
+        // fire-and-forget
+        result.updateSummary().then(async (newSummary) => {
+          if (newSummary && newSummary !== session.summary) {
+            try {
+              await Session.findOneAndUpdate(
+                { _id: session._id },
+                { summary: newSummary }
+              );
+              console.log(`[Summary] Session:${session._id} updated (${newSummary.length} chars)`);
+            } catch (e) {
+              console.warn('[Summary] save fail:', e.message);
+            }
+          }
+        }).catch(e => console.warn('[Summary] update fail:', e.message));
+      }
+    }
   });
 
   // ── 清空对话 ────────────────────────────────────────────────

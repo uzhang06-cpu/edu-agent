@@ -18,6 +18,7 @@ const fs     = require('fs');
 const path   = require('path');
 const { Router } = require('express');
 const { hybridRetrieve } = require('./enhanced-retriever');
+const retrieverV2        = require('./retriever-v2');  // P1-1 新版
 const { recordQuery, recordClick, getUserInterests, getPersonalizedRecommendations, getUserSummary } = require('./user-profile');
 const { getKnowledgeStats, getUserActivityStats, getSystemHealth, getDashboardSummary } = require('./dashboard');
 const { parseFile, parseFiles, checkDependencies } = require('./file-parser');
@@ -90,10 +91,21 @@ function tokenize(text) {
 }
 
 // ── 核心检索函数（被 agent 调用）────────────────────────────────
-function retrieve(query, topK = 3, minScore = 0.15, useEnhanced = true) {
+// P1-1: 优先走 retriever-v2（BM25 + 常驻内存 + 改进分词），失败降级到旧版
+function retrieve(query, topK = 3, minScore = 0.5, useEnhanced = true) {
+  // 第一优先：v2（BM25，常驻内存索引）
+  try {
+    const v2 = retrieverV2.retrieve(query, topK, minScore);
+    if (v2 && v2.length) return v2;
+    // 空命中不直接失败，尝试次优路径
+  } catch (e) {
+    console.warn('[知识库] v2 检索失败，回退旧版:', e.message);
+  }
+
+  // 第二优先：老 hybridRetrieve（TF-IDF）
   if (useEnhanced) {
     try {
-      const results = hybridRetrieve(query, topK, { minScore });
+      const results = hybridRetrieve(query, topK, { minScore: Math.min(minScore, 0.15) });
       return results.map(item => ({
         id:      item.id,
         title:   item.title,
@@ -102,21 +114,18 @@ function retrieve(query, topK = 3, minScore = 0.15, useEnhanced = true) {
         source:  item.source,
       }));
     } catch (e) {
-      console.error('[知识库] 增强检索失败，回退到基础检索:', e.message);
-      // 回退到基础检索
+      console.error('[知识库] hybridRetrieve 失败，回退基础检索:', e.message);
     }
   }
 
-  // 基础检索（保持向后兼容）
+  // 兜底：老关键词打分
   const docs = loadAllDocs();
   const tokens = tokenize(query);
-
   const scored = docs
     .map(doc => ({ doc, score: scoreDoc(doc, tokens) }))
-    .filter(item => item.score >= minScore)
+    .filter(item => item.score >= Math.min(minScore, 0.15))
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);
-
   return scored.map(item => ({
     id:      item.doc.id,
     title:   item.doc.title,

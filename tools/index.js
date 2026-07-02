@@ -20,6 +20,89 @@
 const { Router } = require('express');
 const router = Router();
 const dataService = require('../services/data-service');
+const { LRU } = require('../services/cache');
+const { logger } = require('../services/logger');
+
+// ── 工具结果缓存（P1-3） ─────────────────────────────────────────
+//   Key = `${toolName}:${JSON.stringify(args)}`；TTL 见每个工具
+const toolCache = new LRU({ max: 500, ttlMs: 15 * 60 * 1000 });
+
+const CACHE_TTL = {
+  web_search:       15 * 60 * 1000,  // 15 min（时效搜索）
+  get_course_info:  60 * 60 * 1000,  // 1h
+  get_teacher_info: 60 * 60 * 1000,
+  get_faq:          60 * 60 * 1000,
+  get_schedule:     30 * 60 * 1000,
+  check_order_status: 60 * 1000,     // 订单状态易变，1 min
+  calculate_discount:  0,             // 计算类不缓存
+  get_comfort_template: 60 * 60 * 1000,
+  plan_learning_path:  60 * 60 * 1000,
+};
+
+// ────────────────────────────────────────────────────────────────
+//  JSON Schema 定义（P1-2 function calling）
+//  每个工具挂 schema 字段；导出 getToolsSchema() 返回 OpenAI 风格
+// ────────────────────────────────────────────────────────────────
+const SCHEMAS = {
+  get_course_info: {
+    type: 'object',
+    properties: { courseName: { type: 'string', description: '课程名称，如 "精英班"、"提升班"、"基础班"、"单科强化班"' } },
+    required: ['courseName'],
+  },
+  calculate_discount: {
+    type: 'object',
+    properties: {
+      originalPrice: { type: 'number', description: '原价（整数元）' },
+      discountType:  { type: 'string', enum: ['nine_fold', 'eight_five_fold', 'coupon_500', 'coupon_1000'], description: '折扣类型' },
+    },
+    required: ['originalPrice', 'discountType'],
+  },
+  check_order_status: {
+    type: 'object',
+    properties: { orderId: { type: 'string', description: '订单号，形如 XG12345...' } },
+    required: ['orderId'],
+  },
+  get_teacher_info: {
+    type: 'object',
+    properties: { subject: { type: 'string', description: '学科（数学/语文/英语/物理/化学）或教师姓名' } },
+    required: ['subject'],
+  },
+  plan_learning_path: {
+    type: 'object',
+    properties: {
+      subject:      { type: 'string', description: '学科' },
+      currentLevel: { type: 'string', enum: ['poor','medium','good'], description: '当前水平' },
+      targetScore:  { type: 'number', description: '目标分数（可选）' },
+    },
+    required: ['subject', 'currentLevel'],
+  },
+  get_schedule: {
+    type: 'object',
+    properties: { courseName: { type: 'string', description: '课程名称或学科' } },
+    required: ['courseName'],
+  },
+  get_faq: {
+    type: 'object',
+    properties: { question: { type: 'string', description: '用户的问题关键词或原句' } },
+    required: ['question'],
+  },
+  get_comfort_template: {
+    type: 'object',
+    properties: {
+      emotion:  { type: 'string', enum: ['angry','anxious','sad','frustrated'], description: '用户负面情绪' },
+      scenario: { type: 'string', description: '场景简述' },
+    },
+    required: ['emotion'],
+  },
+  web_search: {
+    type: 'object',
+    properties: {
+      query: { type: 'string', description: '精炼的搜索关键词，去掉"请帮我查"等无意义词' },
+      num:   { type: 'integer', minimum: 1, maximum: 10, description: '返回结果条数，默认 5' },
+    },
+    required: ['query'],
+  },
+};
 
 // ════════════════════════════════════════════════════════════════
 //  工具实现
@@ -188,23 +271,104 @@ const TOOLS = [
 //  对外接口
 // ════════════════════════════════════════════════════════════════
 
-/** 执行工具（供 agent 调用） */
+/** 执行工具（供 agent 调用），带 LRU 缓存 */
 async function executeTool(name, args) {
   const tool = TOOLS.find(t => t.name === name && t.enabled);
   if (!tool) return { error: `工具 ${name} 不存在或已禁用` };
+
+  const cleanArgs = args || {};
+  const cacheKey  = `${name}:${JSON.stringify(cleanArgs)}`;
+  const ttl       = CACHE_TTL[name] ?? 0;
+
+  if (ttl > 0) {
+    const cached = toolCache.get(cacheKey);
+    if (cached !== undefined) {
+      logger.info('tool.cache_hit', { name, cacheKey: cacheKey.slice(0, 100) });
+      return cached;
+    }
+  }
+
   try {
-    return await tool.execute(args || {});
+    const result = await tool.execute(cleanArgs);
+    if (ttl > 0 && result && !result.error) {
+      toolCache.set(cacheKey, result, ttl);
+    }
+    return result;
   } catch (e) {
     return { error: e.message };
   }
 }
 
-/** 获取所有已启用工具的描述（注入 LLM prompt） */
+/** 老 API：以文本形式列工具描述（保留兼容） */
 function getEnabledToolsDesc() {
   return TOOLS
     .filter(t => t.enabled)
     .map(t => `- ${t.name}(${JSON.stringify(t.params)}): ${t.description}`)
     .join('\n');
+}
+
+/** P1-2：返回 OpenAI 风格 tools 数组，供 LLM function calling */
+function getToolsSchema() {
+  return TOOLS
+    .filter(t => t.enabled && SCHEMAS[t.name])
+    .map(t => ({
+      type: 'function',
+      function: {
+        name:        t.name,
+        description: t.description,
+        parameters:  SCHEMAS[t.name],
+      },
+    }));
+}
+
+/**
+ * P1-3：把工具结果格式化为 LLM 友好的 markdown / 引用格式，
+ * 避免直接 JSON.stringify 让模型难以解析
+ */
+function formatToolResult(name, result) {
+  if (!result || result.error) {
+    return `[工具 ${name} 失败] ${result?.error || 'unknown error'}`;
+  }
+  switch (name) {
+    case 'web_search': {
+      if (!result.results?.length) {
+        return `[web_search] engine=${result.engine || '?'}，未找到结果${result.answer ? '\nAI 摘要：' + result.answer : ''}`;
+      }
+      const lines = [`[web_search] 引擎=${result.engine} · 共 ${result.count} 条`];
+      if (result.answer) lines.push(`\n**AI 摘要**：${result.answer}`);
+      lines.push('\n**结果列表**：');
+      result.results.forEach((r, i) => {
+        lines.push(`[${i + 1}] ${r.title || '(无标题)'}\n    ${r.snippet || ''}\n    URL: ${r.url || ''}`);
+      });
+      return lines.join('\n');
+    }
+    case 'get_course_info': {
+      if (!result.found) return `[课程查询] 未找到，${result.info || ''}`;
+      return `[课程信息]\n${result.info}`;
+    }
+    case 'get_teacher_info': {
+      if (!result.found) return `[教师查询] ${result.message}`;
+      const lines = [`[教师信息]`];
+      for (const t of (result.teachers || [])) {
+        lines.push(`- **${t.name}**：${t.info}`);
+      }
+      return lines.join('\n');
+    }
+    case 'check_order_status': {
+      if (!result.found) return `[订单查询] ${result.message}`;
+      return `[订单 ${result.orderId}]\n${JSON.stringify(result, null, 2)}`;
+    }
+    case 'get_faq': {
+      if (!result.found) return `[FAQ] ${result.message}`;
+      return `[FAQ 参考答案]\n${result.answer}`;
+    }
+    case 'calculate_discount': {
+      if (result.error) return `[折扣计算] ${result.error}`;
+      return `[折扣计算] 原价 ${result.originalPrice}，${result.discountType}，最终 ${result.finalPrice}（省 ${result.saved}）`;
+    }
+    default:
+      return `[${name}]\n${JSON.stringify(result, null, 2)}`;
+  }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -241,4 +405,13 @@ router.post('/test', async (req, res) => {
   res.json({ tool: name, args, result });
 });
 
-module.exports = { TOOLS, executeTool, getEnabledToolsDesc, router };
+module.exports = {
+  TOOLS,
+  executeTool,
+  getEnabledToolsDesc,
+  getToolsSchema,
+  formatToolResult,
+  SCHEMAS,
+  toolCache,
+  router,
+};

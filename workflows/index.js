@@ -31,14 +31,41 @@ const router = Router();
 
 const WORKFLOWS = [
 
-  // ── 1. 投诉处理专属流程（优先级最高）────────────────────────────
+  // ── 0. 紧急预警流程（最高优先级，多维路由 P1-5）────────────────
+  //   触发：情绪强度 ≥ 9 或紧急度 = 高，且非投诉场景
+  //   目的：任何高压场景（家长着急要答复、临考焦虑等）都先安抚 + 快速响应
+  {
+    name: 'emergency_flow',
+    label: '紧急响应流程',
+    description: '情绪强烈或紧急度高时的快速响应流程，先安抚后办事',
+    priority: 110,
+    enabled: true,
+    match: (p) =>
+      p?.scenario !== '投诉维权' &&
+      ((p?.emotion_intensity || 0) >= 9 || p?.urgency === '高'),
+    steps: ['perceive', 'execute', 'review', 'conclude'],  // 跳过 plan 加速
+    systemPrompt: `你是星光教育的资深客户经理，用户当前情绪激动或事情紧急。
+应对策略：
+- 第一句先明确"我听到您的问题了，马上处理"（不套话，不寒暄）
+- 用简短、明确、可执行的语言，禁止模糊承诺
+- 如需时间，给出具体时间点（"1 小时内"而非"尽快"）
+- 情绪过激时先共情 1 句，再切入解决方案，不超过 3 句话
+- 如涉及需要人工处理的事项，直接给出下一步动作（电话、加微、跳转客服）`,
+  },
+
+  // ── 1. 投诉处理专属流程 ────────────────────────────────────────
+  //   触发：显式投诉场景，或 愤怒/焦虑 × 强度≥7 的其他场景（P1-5）
   {
     name: 'complaint_flow',
     label: '投诉处理流程',
-    description: '专为投诉、维权场景设计：额外增加"情绪先行"和"方案承诺"环节',
+    description: '专为投诉、维权场景设计：额外增加"情绪先行"和"方案承诺"环节；愤怒/焦虑高强度的其他场景也会走此流程',
     priority: 100,
     enabled: true,
-    match: (perception) => perception?.scenario === '投诉维权',
+    match: (p) => {
+      if (p?.scenario === '投诉维权') return true;
+      const strong = (p?.emotion_intensity || 0) >= 7;
+      return strong && ['愤怒', '焦虑'].includes(p?.emotion);
+    },
     steps: ['perceive', 'plan', 'execute', 'review', 'conclude'],
     systemPrompt: `你是星光教育的资深客户成功经理，专门处理敏感投诉。
 核心原则：
@@ -158,12 +185,21 @@ const WORKFLOWS = [
 //  路由选择逻辑
 // ════════════════════════════════════════════════════════════════
 
-/** 根据感知结果选择最优工作流 */
+/** 根据感知结果选择最优工作流。返回 { workflow, reason } 便于日志追踪 */
 function selectWorkflow(perception) {
   const candidates = WORKFLOWS
     .filter(w => w.enabled && w.match(perception))
     .sort((a, b) => b.priority - a.priority);
-  return candidates[0] || WORKFLOWS.find(w => w.name === 'standard_5step');
+  const workflow = candidates[0] || WORKFLOWS.find(w => w.name === 'standard_5step');
+  const reason = candidates.length > 1
+    ? `优先命中(其他候选:${candidates.slice(1).map(c => c.name).join(',')})`
+    : candidates.length === 1 ? '唯一命中' : '兜底';
+  return { workflow, reason };
+}
+
+/** 老接口：只返回 workflow（保留向后兼容） */
+function selectWorkflowLegacy(perception) {
+  return selectWorkflow(perception).workflow;
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -192,9 +228,20 @@ router.patch('/:name', (req, res) => {
 
 /** GET /api/workflows/match?scenario=xxx — 预览场景匹配哪个工作流 */
 router.get('/utils/match', (req, res) => {
-  const fakePerception = { scenario: req.query.scenario };
-  const wf = selectWorkflow(fakePerception);
-  res.json({ scenario: fakePerception.scenario, matched: wf.name, label: wf.label, steps: wf.steps });
+  const fakePerception = {
+    scenario: req.query.scenario,
+    emotion:  req.query.emotion,
+    emotion_intensity: Number(req.query.intensity) || 0,
+    urgency:  req.query.urgency,
+  };
+  const { workflow, reason } = selectWorkflow(fakePerception);
+  res.json({
+    input:   fakePerception,
+    matched: workflow.name,
+    label:   workflow.label,
+    steps:   workflow.steps,
+    reason,
+  });
 });
 
-module.exports = { WORKFLOWS, selectWorkflow, router };
+module.exports = { WORKFLOWS, selectWorkflow, selectWorkflowLegacy, router };
