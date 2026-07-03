@@ -2193,9 +2193,9 @@ async function selectSession(id) {
         if (m.role === 'user') {
           addUserMessage(m.content, null, false);
         } else {
-          // 还原原始的段落拆分逻辑，避免多段内容合成一个大气泡
-          const chunks = m.content.split(/\n\s*\n/).filter(c => c.trim());
-          chunks.forEach((chunk, i) => addBotMessage(chunk, i === 0 ? null : null, false));
+          // 与实时渲染共用 splitForBubbles，保证历史与实时分条一致（修复"重载后合并/不一致"）
+          const chunks = splitForBubbles(m.content);
+          chunks.forEach((chunk, i) => addBotMessage(chunk, null, false));
         }
       });
     }
@@ -2943,45 +2943,53 @@ function autoResize(el) {
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
 
-// 把 AI 回复拆为合适数量的气泡：
-// - 丢弃纯分隔符段（---、===、***）
-// - 短段（<60 字）合并到下一段
-// - 总气泡数 ≤ 3，超出部分合并到最后一段
+// 把 AI 回复拆为语义连贯的气泡（确定性，历史与实时共用同一逻辑）：
+// 1. 丢弃纯分隔符段（---、===、***）
+// 2. 标题型/过短段（<22字 或 以"："结尾）粘到下一段，避免孤立标题
+// 3. 结构化正文（连续步骤/要点）聚成一个气泡；遇到"另外/对了/顺便"等话题转折才另起气泡
+// 4. 上限 4 个气泡，超出并入最后一个（保持结构块在一起）
 function splitForBubbles(text) {
   if (!text) return [''];
-  const SEPARATOR_RE = /^[\s\-=*_]{3,}$/;
-  const MIN_CHUNK = 60;
-  const MAX_BUBBLES = 3;
+  const SEP = /^[\s\-=*_]{3,}$/;
+  let parts = text.split(/\n\s*\n/).map(s => s.trim()).filter(s => s && !SEP.test(s));
+  if (parts.length <= 1) return parts.length ? parts : [text];
 
-  // 按双换行拆，去掉纯分隔符段
-  let parts = text.split(/\n\s*\n/)
-    .map(s => s.trim())
-    .filter(s => s && !SEPARATOR_RE.test(s));
-
-  // 合并：短段贴到下一段
+  // 2) 合并标题型/过短段到下一段
   const merged = [];
-  let buf = '';
-  for (const p of parts) {
-    buf = buf ? buf + '\n\n' + p : p;
-    if (buf.length >= MIN_CHUNK) {
-      merged.push(buf);
-      buf = '';
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    const isHeadingLike = p.length < 22 || /[：:]$/.test(p);
+    if (isHeadingLike && i < parts.length - 1) {
+      parts[i + 1] = p + '\n' + parts[i + 1];
+    } else {
+      merged.push(p);
     }
   }
-  if (buf) {
-    // 若末尾还有 buf 且 merged 非空，把它并到最后一段
-    if (merged.length) merged[merged.length - 1] += '\n\n' + buf;
-    else merged.push(buf);
-  }
 
-  // 限制气泡总数
-  if (merged.length > MAX_BUBBLES) {
-    const head = merged.slice(0, MAX_BUBBLES - 1);
-    const tail = merged.slice(MAX_BUBBLES - 1).join('\n\n');
-    return [...head, tail];
+  // 3) 话题转折另起气泡，其余聚合
+  const TRANSITION = /^(另外|对了|顺便|还有|最后|除此之外|不过|再补充|额外)/;
+  const bubbles = [];
+  let buf = '';
+  for (const p of merged) {
+    if (buf && TRANSITION.test(p)) {
+      bubbles.push(buf);
+      buf = p;
+    } else {
+      buf = buf ? buf + '\n\n' + p : p;
+    }
   }
-  return merged.length ? merged : [text];
+  if (buf) bubbles.push(buf);
+
+  // 4) 上限保护
+  const MAX_BUBBLES = 4;
+  if (bubbles.length > MAX_BUBBLES) {
+    const head = bubbles.slice(0, MAX_BUBBLES - 1);
+    head.push(bubbles.slice(MAX_BUBBLES - 1).join('\n\n'));
+    return head;
+  }
+  return bubbles.length ? bubbles : [text];
 }
+
 </script>
 </body>
 </html>

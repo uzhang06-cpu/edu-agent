@@ -223,10 +223,10 @@ io.on('connection', (socket) => {
       session.lastUpdate = new Date();
       await session.save();
 
-      // ── 异步摘要更新（P0-3）：不阻塞用户
-      //    条件：每 3 轮更新一次（消息条数为 6, 12, 18 时触发）
-      const shouldUpdateSummary = typeof result.updateSummary === 'function'
-        && (session.messages.length % 6 === 0 || session.messages.length === 2);
+      // ── 异步摘要更新（P0-3 + P3 记忆）：不阻塞用户，每轮都更新
+      //    摘要是累积式"客户档案"，需每轮及时捕获关键事实（姓名/约定/报价），
+      //    否则关键信息掉出 10 条历史窗口后就丢了。因是 fire-and-forget，不影响响应速度。
+      const shouldUpdateSummary = typeof result.updateSummary === 'function';
       if (shouldUpdateSummary) {
         // fire-and-forget
         result.updateSummary().then(async (newSummary) => {
