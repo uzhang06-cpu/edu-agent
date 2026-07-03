@@ -178,8 +178,15 @@ const FEWSHOT = `
 // ──────────────────────────────────────────────────────────────────
 //  主入口
 // ──────────────────────────────────────────────────────────────────
-async function perceive({ message, summary, identity, traceId, log }) {
+async function perceive({ message, summary, history, identity, traceId, log }) {
   const heuristic = heuristicPerceive(message, identity);
+
+  // 取最近 3 轮对话（最多 6 条）作为上下文，让短回复能被正确归类
+  const recent = Array.isArray(history) ? history.slice(-6) : [];
+  const lastAssistant = [...recent].reverse().find(m => m.role === 'assistant');
+  const historyBlock = recent.length
+    ? recent.map(m => `${m.role === 'user' ? '用户' : 'AI'}：${String(m.content || '').slice(0, 120)}`).join('\n')
+    : '(无历史)';
 
   const prompt = `你是"用户意图 + 情绪"分析器，为一个教育行业 AI 助手服务。请严格按 JSON 输出，只输出 JSON，不要任何多余文字。
 
@@ -196,12 +203,20 @@ async function perceive({ message, summary, identity, traceId, log }) {
 - "闲聊"：以上都不是且用户没有明确诉求
 - 情绪 intensity 1-10：多个感叹号/激烈用词 → ≥7；平静事实性问题 → 2-4
 
+⚠️ 上下文连贯性（重要）：
+- 用户消息可能是对上一轮 AI 提问的简短回应或补充。**必须结合下面的对话历史判断场景**，不要孤立地看最新消息。
+- 例：AI 上一句在聊课程并问"想了解强基计划方案吗"，用户答"强基计划"——这是**延续课程咨询**，不是"信息查询"。
+- 只有当用户明确要查时效性/外部信息（最新政策、今天的数据等）时才判"信息查询"；对上一轮问题的作答一般延续上一轮场景。
+
 ${FEWSHOT}
 
 ### 待分析
 当前对话摘要：${summary || '(无)'}
+最近对话历史（旧→新）：
+${historyBlock}
+${lastAssistant ? `（注意：AI 上一句是"${String(lastAssistant.content).slice(0, 60)}"，用户最新消息很可能是在回应它）` : ''}
 前端传入身份：${identity === 'parent' ? '家长' : '学生'}（可被内容覆盖）
-用户消息：${message}
+用户最新消息：${message}
 
 请输出严格 JSON（含所有字段）：`;
 
@@ -250,6 +265,21 @@ ${FEWSHOT}
   // ── 一致性检查：情绪强度 ≥ 8 → 紧急度至少中
   if (result.emotion_intensity >= 8 && result.urgency === '低') {
     result.urgency = '中';
+  }
+
+  // ── 上下文守卫：短回复 + 无搜索关键词 + 有上文 → 不该判"信息查询"（避免误触发联网）
+  //    典型：AI 上一句在聊课程并提问，用户答"强基计划"，应延续上文而非当作新的检索请求
+  const hasSearchKw = /搜索|检索|查一下|查一查|查询|搜一下|最新|今天|今日|最近|近期|实时|目前|当前|新闻|动态|政策|排行|股价|汇率|什么时候|几号/.test(message);
+  if (result.scenario === '信息查询' && !hasSearchKw && String(message).trim().length <= 8 && recent.length > 0) {
+    // 结合最近历史内容猜测延续场景（排除"信息查询"自身）
+    const ctxText = recent.map(m => m.content).join(' ');
+    const ctxScores = scoreKeywords(ctxText, KEYWORDS);
+    delete ctxScores['信息查询'];
+    const best = Object.entries(ctxScores).sort((a, b) => b[1] - a[1])[0];
+    const demoted = best ? best[0] : '课程咨询';   // 教育顾问场景下最稳的兜底
+    log?.info('perceive.demote_infoquery_by_context', { traceId, message, from: '信息查询', to: demoted });
+    result.scenario = demoted;
+    result._source += '+ctx_guard';
   }
 
   return result;

@@ -1822,11 +1822,29 @@
 let authToken    = localStorage.getItem('xg_token') || '';
 let authUsername = localStorage.getItem('xg_username') || '';
 let authTab      = 'login'; // 'login' | 'register'
+let _authExpiredHandled = false;
 
-function authFetch(url, options = {}) {
+async function authFetch(url, options = {}) {
   options.headers = options.headers || {};
   if (authToken) options.headers['Authorization'] = 'Bearer ' + authToken;
-  return fetch(url, options);
+  const res = await fetch(url, options);
+  // token 过期/无效 → 自动清理并弹出登录（避免静默空白，需重新登录才加载的问题）
+  if (res.status === 401) handleAuthExpired();
+  return res;
+}
+
+// 登录态失效统一处理：清 token（保留 sessionId 以便重登后回到原会话）+ 弹登录框
+function handleAuthExpired() {
+  if (_authExpiredHandled) return;
+  _authExpiredHandled = true;
+  localStorage.removeItem('xg_token');
+  localStorage.removeItem('xg_username');
+  authToken = '';
+  authUsername = '';
+  try { socket && socket.disconnect(); } catch (e) {}
+  const err = document.getElementById('authError');
+  if (err) err.textContent = '登录已过期，请重新登录';
+  showAuthModal();
 }
 
 function switchTab(tab) {
@@ -1862,6 +1880,7 @@ async function submitAuth() {
     authUsername = data.username;
     localStorage.setItem('xg_token',    authToken);
     localStorage.setItem('xg_username', authUsername);
+    _authExpiredHandled = false;   // 重登成功，重置失效标记
 
     hideAuthModal();
     initApp(); // 登录成功后初始化主应用
@@ -2040,6 +2059,11 @@ function initApp() {
   // 带 JWT 初始化 Socket
   socket = io({ auth: { token: authToken } });
   bindSocketEvents();
+
+  // Socket 鉴权失败（token 过期/无效）→ 走统一失效处理
+  socket.on('connect_error', (e) => {
+    if (/未登录|token|auth|jwt|过期/i.test(e?.message || '')) handleAuthExpired();
+  });
 
   // 加载会话
   (async () => {

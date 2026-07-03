@@ -54,7 +54,7 @@ async function runAgent({ socket, message, history, summary, identity }) {
     // ═════════ STEP 1 · PERCEIVE (P0-5) ═════════
     emit('perceive', 'running', '正在分析用户意图和情绪...');
     const perceiveStarted = Date.now();
-    perception = await perceive({ message, summary, identity, traceId, log });
+    perception = await perceive({ message, summary, history, identity, traceId, log });
     log.info('perceive.done', {
       duration: Date.now() - perceiveStarted,
       scenario: perception.scenario, emotion: perception.emotion,
@@ -259,26 +259,33 @@ ${getEnabledToolsDesc()}
       { role: 'user', content: message },
     ];
 
-    // ── 3f. 流式调用（关键新增：P0-2）
+    // ── 3f. 生成回复
+    //   config.agent.streaming=false（默认）：非流式，等完整回复 → 经质检/改写后一次性下发，
+    //     避免"先流式吐草稿、质检又改写"造成的撕裂感（用户反馈）。
+    //   =true：流式，边生成边 emit agent_delta（体验更快，但与 refine 冲突时会替换）。
     let firstDeltaAt = 0;
-    let streamedContent = '';
-    try {
-      const streamRes = await chatStream({
-        step: 'execute',
-        messages: executeMessages,
-        onDelta: (delta) => {
-          if (!firstDeltaAt) firstDeltaAt = Date.now();
-          streamedContent += delta;
-          socket.emit('agent_delta', { delta, traceId });
-        },
-        traceId, log,
-      });
-      response = streamRes.content || streamedContent;
-    } catch (err) {
-      log.warn('execute.stream_fail_fallback_nonstream', { msg: err.message?.slice(0, 200) });
-      // 流式失败 → 降级非流式
-      const nonStream = await chat({ step: 'execute', messages: executeMessages, traceId, log });
-      response = nonStream.content;
+    if (config.agent.streaming) {
+      let streamedContent = '';
+      try {
+        const streamRes = await chatStream({
+          step: 'execute',
+          messages: executeMessages,
+          onDelta: (delta) => {
+            if (!firstDeltaAt) firstDeltaAt = Date.now();
+            streamedContent += delta;
+            socket.emit('agent_delta', { delta, traceId });
+          },
+          traceId, log,
+        });
+        response = streamRes.content || streamedContent;
+      } catch (err) {
+        log.warn('execute.stream_fail_fallback_nonstream', { msg: err.message?.slice(0, 200) });
+        const nonStream = await chat({ step: 'execute', messages: executeMessages, traceId, log });
+        response = nonStream.content;
+      }
+    } else {
+      const res = await chat({ step: 'execute', messages: executeMessages, traceId, log });
+      response = res.content;
     }
 
     // ── 3g. 输出清洗（P0-4）

@@ -61,6 +61,7 @@ module.exports = {
   agent: {
     reviewScoreThreshold: 7,  // 低于此分数触发优化（0-10）
     maxRefinements: 1,        // 最多优化几次
+    streaming: false,         // 实时流式输出：默认关闭（避免与质检/改写冲突导致回复被替换的撕裂感）
   },
 
   // ──────────────────────────────────────────────────────────
