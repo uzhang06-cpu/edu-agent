@@ -1111,31 +1111,45 @@
     ══════════════════════════════════════════════════════════ */
     .emoji-picker {
       position: absolute;
-      bottom: 88px;
-      left: 24px;
-      background: var(--ink-2);
-      border: 1px solid var(--border);
-      border-radius: 13px;
+      bottom: 12px;
+      left: 18px;
+      background: var(--card);
+      border: 1px solid var(--border-light);
+      border-radius: 16px;
       padding: 10px;
-      display: none;
+      display: grid;
       grid-template-columns: repeat(8, 1fr);
       gap: 3px;
       z-index: 100;
-      box-shadow: var(--shadow-lg);
+      box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,0.9);
+      /* 平滑弹出：从左下角（表情按钮方向）缩放淡入 */
+      transform-origin: bottom left;
+      opacity: 0;
+      visibility: hidden;
+      transform: scale(0.9) translateY(10px);
+      pointer-events: none;
+      transition: opacity 0.16s ease, transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1), visibility 0s linear 0.24s;
     }
 
-    .emoji-picker.open { display: grid; }
+    .emoji-picker.open {
+      opacity: 1;
+      visibility: visible;
+      transform: scale(1) translateY(0);
+      pointer-events: auto;
+      transition: opacity 0.16s ease, transform 0.24s cubic-bezier(0.34, 1.56, 0.64, 1), visibility 0s;
+    }
 
     .emoji-item {
       font-size: 19px;
       cursor: pointer;
       padding: 5px;
-      border-radius: 7px;
+      border-radius: 8px;
       text-align: center;
-      transition: background 0.12s;
+      transition: background 0.15s ease, transform 0.15s ease;
     }
 
-    .emoji-item:hover { background: var(--ink-3); }
+    .emoji-item:hover { background: var(--ink-3); transform: scale(1.18); }
+    .emoji-item:active { transform: scale(0.92); }
 
     /* ══════════════════════════════════════════════════════════
        场景徽章
