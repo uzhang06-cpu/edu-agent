@@ -1,8 +1,9 @@
 const mongoose = require('mongoose');
 
 const messageSchema = new mongoose.Schema({
-  role:    { type: String, enum: ['user', 'assistant'] },
-  content: { type: String },
+  role:     { type: String, enum: ['user', 'assistant'] },
+  content:  { type: String },
+  scenario: { type: String },   // assistant 消息的场景（用于历史重载还原 badge）
 }, { _id: false });
 
 const sessionSchema = new mongoose.Schema({

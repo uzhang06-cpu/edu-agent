@@ -209,7 +209,11 @@ io.on('connection', (socket) => {
 
     if (result.success) {
       session.messages.push({ role: 'user',      content: fullMessage });
-      session.messages.push({ role: 'assistant', content: result.response });
+      session.messages.push({
+        role: 'assistant',
+        content: result.response,
+        scenario: result.perception?.scenario,   // 持久化场景，供历史重载还原 badge
+      });
 
       if (session.title === '新咨询项目' && session.messages.length >= 2) {
         session.title = message.slice(0, 15) || '咨询会话';
