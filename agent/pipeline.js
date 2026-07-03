@@ -65,6 +65,9 @@ async function runAgent({ socket, message, history, summary, identity }) {
       `场景:${perception.scenario} · 情绪:${perception.emotion}(${perception.emotion_intensity}/10) · 紧急:${perception.urgency}`
     );
 
+    // P0-2 修复问题3：感知一完成就把画像推给前端，让 badge 先于/伴随流式出现
+    socket.emit('agent_meta', { perception, traceId });
+
     // ═════════ WORKFLOW 路由 (P1-5) ═════════
     const { workflow, reason: wfReason } = selectWorkflow(perception);
     const steps = workflow.steps;
@@ -320,16 +323,27 @@ ${getEnabledToolsDesc()}
       );
 
     if (needRefine) {
-      emit('conclude', 'running', `评分不足，正在优化回复...`);
+      emit('conclude', 'running', `正在优化回复...`);
       const refineStarted = Date.now();
-      response = await runRefine({
+      const refinedText = await runRefine({
         message, perception, originalResponse: response, review,
         ragContext, toolResults, traceId, log,
       });
-      response = cleanReply(response);
-      refined = true;
-      log.info('refine.done', { duration: Date.now() - refineStarted, outLen: response.length });
-      emit('conclude', 'done', `已优化，最终 ${response.length} 字`);
+      const cleanedRefine = cleanReply(refinedText);
+
+      // 拒答守卫：优化后变成"无法回答"而原回复不是 → 判定改坏，回退原答案
+      if (isRefusal(cleanedRefine) && !isRefusal(response)) {
+        log.warn('refine.refusal_guard_revert', {
+          origLen: response.length, refinedLen: cleanedRefine.length,
+        });
+        emit('conclude', 'done', '质量达标，输出最终回复');
+        // response 保持不变（原答案）
+      } else {
+        response = cleanedRefine;
+        refined = true;
+        log.info('refine.done', { duration: Date.now() - refineStarted, outLen: response.length });
+        emit('conclude', 'done', `已优化，最终 ${response.length} 字`);
+      }
     } else {
       emit('conclude', 'done', review.skipped ? '快速通道，直接输出' : '质量达标，输出最终回复');
     }
@@ -406,47 +420,65 @@ function heuristicPlan(perception) {
 
 /** review 触发决策（P0-3 关键：只在必要时跑） */
 function decideShouldReview({ perception, response, workflow, toolsUsed, ragHit }) {
-  // 敏感场景一律 review
+  // 敏感场景一律 review（这些场景回复错了代价高）
   if (perception.scenario === '投诉维权') return true;
   if (perception.urgency === '高') return true;
   if (perception.emotion_intensity >= 7) return true;
-  // 有工具调用的（可能有幻觉/时效性问题）
+  // 有工具调用的（可能有幻觉/时效性问题），且是需要事实核对的场景
   if (toolsUsed.length > 0) return true;
-  // 回复较长且关键场景
-  if (response.length >= 300 && perception.scenario !== '闲聊') return true;
-  // 其他简单场景（闲聊 / 简短课程咨询）跳过
+  // 命中知识库、长回复 → 值得核对是否与知识库一致
+  if (ragHit && response.length >= 200) return true;
+  // 通用学科问答/闲聊：无证据可核对，review 价值低且有"改坏"风险 → 跳过
+  //   （问题2：曾因长学科答案被 review 误判触发 refine 改口拒答）
+  if (['专业问题', '闲聊'].includes(perception.scenario)) return false;
+  // 其余场景：长回复才复盘
+  if (response.length >= 300) return true;
   return false;
 }
 
-/** 强化后的 review（P1-4） */
+/** 强化后的 review（P1-4，修复问题2：区分"有证据"与"通用知识"两种模式） */
 async function runReview({ message, perception, response, ragContext, toolResults, traceId, log }) {
-  const prompt = `你是严格的回复质检专家（对教育机构 AI 客服）。请输出严格 JSON。
+  const hasEvidence = !!(ragContext || toolResults);
+
+  // 证据段：只有存在证据时才做 grounding 校验；
+  //   否则明确告诉质检模型"这是通用知识问答，凭常识判断正确性，不要因为知识库没有就扣分"
+  const evidenceBlock = hasEvidence
+    ? `【证据材料 — 用于事实核对】
+${ragContext || ''}
+${toolResults || ''}
+
+accuracy 评判：回复中的具体数字/政策/时间承诺应与上面证据一致；若明显编造了证据里没有、且本机构无法兑现的承诺（如乱报退款政策），accuracy 打 ≤5，并把该断言列入 hallucination_risks。
+grounding：仅当回复"编造了证据中不存在、且需要机构背书的具体承诺/数据"时才为 false；与证据一致或无此类承诺时为 true。`
+    : `【无外部证据材料】
+本题属于通用知识/学科问答/闲聊，没有也不需要知识库佐证。
+accuracy 评判：按学科常识和普遍事实判断对错（例如"1 不是质数"是正确的）；正确即高分。绝对不要因为"知识库里查不到"而扣分或要求联网。
+grounding：本类问题恒为 true（模型自身知识即可作答）。`;
+
+  const prompt = `你是教育机构 AI 客服的回复质检员。请输出严格 JSON。
 
 用户消息：${message}
-感知结果：${JSON.stringify({ scenario: perception.scenario, emotion: perception.emotion, urgency: perception.urgency })}
+感知：${JSON.stringify({ scenario: perception.scenario, emotion: perception.emotion, urgency: perception.urgency })}
 AI 回复：${response}
 
-【证据材料 — 用于 grounding 校验】
-${ragContext || '(无 RAG 材料)'}
-${toolResults || '(无工具结果)'}
+${evidenceBlock}
 
-评分维度（各项 1-10 分，严格）：
+评分维度（各 1-10 分）：
 - relevance: 是否答到点上
 - empathy: 语气是否匹配用户情绪
-- accuracy: 事实是否与"证据材料"一致（回复里的具体数字/事实必须能在证据里找到；否则打 ≤ 5）
+- accuracy: 见上（按是否有证据分别判断）
 - tone: 语气是否合场景
-- concise: 是否简明不啰嗦
+- concise: 是否简明
 
-额外必填：
-- grounding (bool)：回复里所有具体数字/时间/人名/政策，是否都能在证据材料里找到；无法验证的即 false
-- hallucination_risks (string[])：具体列出无据可查的断言（如"承诺 24 小时到账但证据里没有此政策"）
+严禁的扣分理由（务必遵守）：
+- 不得因为"这是 AI/无法联网/知识库没有"而给正确的学科答案或常识答案扣分
+- 不得建议把一个已经正确的答案改成"我无法回答/无法检索"
 
 输出 JSON：
 {
   "score": 综合(1-10 整数),
   "relevance": n, "empathy": n, "accuracy": n, "tone": n, "concise": n,
   "grounding": true|false,
-  "hallucination_risks": ["...", "..."],
+  "hallucination_risks": ["仅列真正编造的机构承诺/数据，通用知识不算"],
   "issues": ["主要问题（若有）"],
   "suggestion": "改进建议（若需要）"
 }`;
@@ -460,20 +492,30 @@ ${toolResults || '(无工具结果)'}
       traceId, log,
     });
     const parsed = safeParseJSON(content, {
-      score: 7, grounding: null, issues: [], suggestion: '', hallucination_risks: [],
+      score: 8, grounding: null, issues: [], suggestion: '', hallucination_risks: [],
     });
-    // 硬约束：无证据材料就不能声称 grounding=true
-    if (!ragContext && !toolResults) parsed.grounding = null; // 无法判断
+    // 硬约束：无证据材料 → grounding 恒为 null（永不触发 grounding 型 refine）
+    if (!hasEvidence) parsed.grounding = null;
+    parsed._hasEvidence = hasEvidence;
     return parsed;
   } catch (err) {
     log.warn('review.llm_fail', { msg: err.message?.slice(0, 200) });
-    return { score: 7, grounding: null, issues: [], suggestion: '', _fallback: true };
+    return { score: 8, grounding: null, issues: [], suggestion: '', _fallback: true };
   }
 }
 
-/** refine：明确告诉 LLM 用证据 + 具体问题 */
+/** refine：证据约束仅在有证据时加；通用知识不强加"不许编造"导致改口拒答 */
 async function runRefine({ message, perception, originalResponse, review, ragContext, toolResults, traceId, log }) {
-  const prompt = `请根据以下问题清单和证据材料重写 AI 回复。只输出重写后的回复正文，不要任何解释、不要标签、不要"重写后:"前缀。
+  const hasEvidence = !!(ragContext || toolResults);
+
+  const evidenceConstraint = hasEvidence
+    ? `【必须依据的材料】
+${ragContext || ''}
+${toolResults || ''}
+要求：涉及机构政策/价格/时间承诺时，只能用上面材料里的信息，不要编造。`
+    : `本题是通用知识/学科/闲聊，凭你自己的知识正常作答即可。绝对不要因此改口说"无法回答""无法检索""建议联网"。`;
+
+  const prompt = `请根据问题清单改进下面这条 AI 回复。只输出改进后的回复正文，不要解释、不要标签、不要"重写后:"前缀。
 
 【用户原消息】${message}
 【感知】${perception.scenario} · ${perception.emotion}(${perception.emotion_intensity}/10)
@@ -483,16 +525,14 @@ ${originalResponse}
 
 【发现的问题】${(review.issues || []).join('；') || '(无具体问题)'}
 【幻觉风险】${(review.hallucination_risks || []).join('；') || '(无)'}
-【改进建议】${review.suggestion || '语气更自然，事实更精准'}
+【改进建议】${review.suggestion || '语气更自然，表达更精准'}
 
-${ragContext ? '【必须依据的知识材料】\n' + ragContext : ''}
-${toolResults ? '【必须依据的工具结果】\n' + toolResults : ''}
+${evidenceConstraint}
 
-要求：
-1. 不能编造"证据材料"中没有的具体数字/政策/时间承诺
-2. 保持原有语气基调，只修正问题
-3. 如原回复过长，可精简；如太短漏点，可补充
-4. 不要输出任何思考过程或旁白`;
+改进要求：
+1. 保留原回复中【正确的核心答案】，只修语气/结构/表述问题
+2. 若原回复本身正确，只需润色，不要推翻结论
+3. 不要输出思考过程或旁白`;
 
   const { content } = await chat({
     step: 'refine',
@@ -500,6 +540,15 @@ ${toolResults ? '【必须依据的工具结果】\n' + toolResults : ''}
     traceId, log,
   });
   return content || originalResponse;
+}
+
+/**
+ * 拒答守卫（修复问题2 的兜底）：
+ * 若"优化后"出现拒答/无能为力措辞，而原回复没有，则判定优化把好答案改坏了，回退原回复。
+ */
+const REFUSAL_RE = /无法(回答|检索|获取|提供|查到|查询)|没法(联网|查)|不能回答|无可奉告|我(只|仅)是.{0,6}(机器人|助手|AI).{0,10}(无法|不能)|超出.{0,6}(能力|范围).{0,6}(无法|不能)/;
+function isRefusal(text) {
+  return REFUSAL_RE.test(String(text || ''));
 }
 
 /** 构建 execute 步骤 system prompt（保留旧版所有加固） */
@@ -607,4 +656,4 @@ function shortJson(obj) {
   try { return JSON.stringify(obj).slice(0, 100); } catch { return '?'; }
 }
 
-module.exports = { runAgent };
+module.exports = { runAgent, decideShouldReview, isRefusal };
