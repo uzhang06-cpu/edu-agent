@@ -40,13 +40,13 @@
       --info:         var(--sky);
       --info-dim:     var(--sky-dim);
 
-      /* 背景层次 */
-      --ink:    #f3f4f8;       /* 页面底色 */
+      /* 背景层次（Soft UI：页面底色略深于卡片，让卡片"浮起"） */
+      --ink:    #edf0f7;       /* 页面底色 */
       --ink-2:  #ffffff;       /* 面板/卡片 */
-      --ink-3:  #e8eaf0;       /* 内嵌区域 */
+      --ink-3:  #e6eaf3;       /* 内嵌区域 */
       --surface: #ffffff;
       --card:   #ffffff;
-      --card-hover: #f7f8fc;
+      --card-hover: #f5f7fc;
 
       /* 文字 */
       --text-primary:   #111827;
@@ -54,22 +54,26 @@
       --text-muted:     #5b6370;   /* 原 #6b7280 在浅底上对比度 4.4:1，调深至 ~5.5:1 满足 AA */
 
       /* 边框 */
-      --border:       rgba(0, 0, 0, 0.07);
-      --border-light: rgba(0, 0, 0, 0.05);
-      --border-strong: rgba(0, 0, 0, 0.12);
+      --border:       rgba(30, 41, 90, 0.08);
+      --border-light: rgba(30, 41, 90, 0.05);
+      --border-strong: rgba(30, 41, 90, 0.13);
 
-      /* 阴影 */
-      --shadow-xs: 0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.03);
-      --shadow-sm: 0 2px 8px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
-      --shadow:    0 6px 20px rgba(0,0,0,0.07), 0 2px 6px rgba(0,0,0,0.04);
-      --shadow-lg: 0 16px 48px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.05);
-      --shadow-xl: 0 32px 72px rgba(0,0,0,0.14);
+      /* 阴影 — Soft UI Evolution：柔和多层 + 主色微调，比扁平更有景深、比拟态更清晰 */
+      --shadow-xs: 0 1px 2px rgba(30,41,90,0.05);
+      --shadow-sm: 0 1px 3px rgba(30,41,90,0.05), 0 4px 12px rgba(30,41,90,0.06);
+      --shadow:    0 2px 6px rgba(30,41,90,0.05), 0 10px 28px rgba(30,41,90,0.08);
+      --shadow-lg: 0 4px 14px rgba(30,41,90,0.07), 0 20px 48px rgba(30,41,90,0.12);
+      --shadow-xl: 0 32px 72px rgba(30,41,90,0.16);
+      /* 软浮起：外柔和阴影 + 顶部内高光（Soft UI 关键质感） */
+      --shadow-soft:   0 2px 10px rgba(30,41,90,0.06), inset 0 1px 0 rgba(255,255,255,0.9);
+      --shadow-raised: 0 6px 18px rgba(30,41,90,0.10), inset 0 1px 0 rgba(255,255,255,0.9);
+      --shadow-inset:  inset 0 2px 6px rgba(30,41,90,0.07);
 
-      /* 圆角 */
-      --radius:    14px;
-      --radius-md: 10px;
-      --radius-sm: 8px;
-      --radius-xs: 6px;
+      /* 圆角（Soft UI 偏圆润） */
+      --radius:    16px;
+      --radius-md: 12px;
+      --radius-sm: 10px;
+      --radius-xs: 8px;
     }
 
     /* ══════════════════════════════════════════════════════════
@@ -111,6 +115,10 @@
       --shadow:    0 6px 20px rgba(0,0,0,0.4);
       --shadow-lg: 0 16px 48px rgba(0,0,0,0.5);
       --shadow-xl: 0 32px 72px rgba(0,0,0,0.6);
+      /* Soft UI 暗色：外阴影更深 + 顶部微亮内高光模拟受光面 */
+      --shadow-soft:   0 2px 10px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05);
+      --shadow-raised: 0 6px 18px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.06);
+      --shadow-inset:  inset 0 2px 6px rgba(0,0,0,0.45);
     }
 
     /* ══════════════════════════════════════════════════════════
@@ -360,20 +368,22 @@
 
     /* 咨询记录卡片 */
     .course-card {
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
+      background: var(--card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
       padding: 12px 14px;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
       cursor: pointer;
-      transition: all 0.18s ease;
+      transition: all 0.2s ease;
       position: relative;
+      box-shadow: var(--shadow-xs);
     }
 
     .course-card:hover {
-      background: var(--gold-dim);
-      border-color: rgba(79,110,247,0.25);
-      transform: translateX(2px);
+      background: var(--card-hover);
+      border-color: rgba(79,110,247,0.22);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-sm);
     }
 
     .active-session {
@@ -622,8 +632,8 @@
     }
 
     .msg-avatar {
-      width: 32px; height: 32px;
-      border-radius: 10px;
+      width: 34px; height: 34px;
+      border-radius: 12px;
       flex-shrink: 0;
       display: flex; align-items: center; justify-content: center;
       font-size: 13px;
@@ -631,12 +641,12 @@
 
     .message.user .msg-avatar {
       background: linear-gradient(135deg, var(--gold) 0%, #818cf8 100%);
-      box-shadow: 0 2px 8px rgba(79,110,247,0.3);
+      box-shadow: 0 3px 10px rgba(79,110,247,0.3), inset 0 1px 0 rgba(255,255,255,0.35);
     }
 
     .message.bot .msg-avatar {
       background: linear-gradient(135deg, #10b981 0%, #0ea5e9 100%);
-      box-shadow: 0 2px 8px rgba(16,185,129,0.25);
+      box-shadow: 0 3px 10px rgba(16,185,129,0.28), inset 0 1px 0 rgba(255,255,255,0.35);
       color: #fff;
     }
 
@@ -651,8 +661,8 @@
     .message.user .msg-content { align-items: flex-end; }
 
     .msg-bubble {
-      padding: 11px 16px;
-      border-radius: 16px;
+      padding: 12px 16px;
+      border-radius: 18px;
       font-size: 13.5px;
       line-height: 1.68;
       max-width: 100%;
@@ -660,23 +670,23 @@
     }
 
     .message.user .msg-bubble {
-      background: var(--gold);
+      background: linear-gradient(135deg, #4a66ee, #3f54cf);
       color: #ffffff;
-      border-bottom-right-radius: 4px;
-      box-shadow: 0 3px 12px rgba(79,110,247,0.28);
+      border-bottom-right-radius: 5px;
+      box-shadow: 0 2px 6px rgba(79,110,247,0.18), 0 8px 20px rgba(79,110,247,0.22);
     }
 
     [data-theme="dark"] .message.user .msg-bubble {
-      background: var(--gold);
-      color: #ffffff;
+      background: linear-gradient(135deg, var(--gold-light), var(--gold));
+      color: #0d0f18;
     }
 
     .message.bot .msg-bubble {
-      background: var(--ink-2);
-      border: 1px solid var(--border);
-      border-bottom-left-radius: 4px;
+      background: var(--card);
+      border: 1px solid var(--border-light);
+      border-bottom-left-radius: 5px;
       color: var(--text-primary);
-      box-shadow: var(--shadow-xs);
+      box-shadow: var(--shadow-soft);
     }
 
     .msg-time {
@@ -743,18 +753,18 @@
     .input-wrapper {
       background: var(--ink-2);
       border: 1.5px solid var(--border);
-      border-radius: 14px;
+      border-radius: 16px;
       padding: 10px 14px;
       display: flex;
       align-items: center;
       gap: 10px;
-      transition: border-color 0.18s, box-shadow 0.18s;
-      box-shadow: var(--shadow-xs);
+      transition: border-color 0.2s, box-shadow 0.2s;
+      box-shadow: var(--shadow-inset);
     }
 
     .input-wrapper:focus-within {
       border-color: rgba(79,110,247,0.45);
-      box-shadow: 0 0 0 3px rgba(79,110,247,0.07), var(--shadow-sm);
+      box-shadow: 0 0 0 4px rgba(79,110,247,0.10), var(--shadow-sm);
     }
 
     .input-actions-left {
@@ -806,25 +816,25 @@
     }
 
     .send-btn {
-      background: var(--gold);
+      background: linear-gradient(135deg, var(--gold-light), var(--gold));
       border: none;
-      border-radius: 10px;
-      width: 36px; height: 36px;
+      border-radius: 12px;
+      width: 38px; height: 38px;
       display: flex; align-items: center; justify-content: center;
       cursor: pointer;
-      transition: all 0.18s ease;
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
       flex-shrink: 0;
       color: #ffffff;
       font-size: 15px;
-      box-shadow: 0 3px 10px var(--gold-glow);
+      box-shadow: 0 4px 12px var(--gold-glow), inset 0 1px 0 rgba(255,255,255,0.28);
     }
 
     .send-btn:hover:not(:disabled) {
-      transform: translateY(-1px) scale(1.03);
-      box-shadow: 0 5px 16px var(--gold-glow);
+      transform: translateY(-2px) scale(1.04);
+      box-shadow: 0 8px 20px var(--gold-glow), inset 0 1px 0 rgba(255,255,255,0.28);
     }
 
-    .send-btn:active:not(:disabled) { transform: scale(0.96); box-shadow: none; }
+    .send-btn:active:not(:disabled) { transform: scale(0.94); box-shadow: var(--shadow-inset); }
 
     .send-btn:disabled {
       background: var(--ink-3);
@@ -980,11 +990,12 @@
 
     /* 情绪卡片 */
     .emotion-card {
-      background: var(--ink);
-      border: 1px solid var(--border);
-      border-radius: var(--radius-sm);
+      background: var(--card);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-md);
       padding: 14px;
       margin-top: 14px;
+      box-shadow: var(--shadow-soft);
     }
 
     .emotion-title {
