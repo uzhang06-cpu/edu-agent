@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+.env
+.git
+.gitignore
+*.md
+一键启动.bat
+knowledge/uploads
+knowledge/profiles
+knowledge/.cache
+.claude
+tests
