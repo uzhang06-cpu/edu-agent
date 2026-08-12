@@ -19,7 +19,7 @@ module.exports = {
   // ──────────────────────────────────────────────────────────
   //  🔑 DeepSeek API Key  ← 在这里或 .env 文件中修改
   // ──────────────────────────────────────────────────────────
-  DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY || 'sk-在这里填写你的DeepSeekKey',
+  DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY || '',
 
   // 学校名称（显示在前端左上角 + 浏览器标题）
   SCHOOL_NAME: process.env.SCHOOL_NAME || '星光教育',
@@ -31,7 +31,7 @@ module.exports = {
   MONGODB_URI: process.env.MONGODB_URI || '',
 
   // JWT 签名密钥（生产环境请设为随机长字符串）
-  JWT_SECRET: process.env.JWT_SECRET || 'xingguang_edu_secret_2024',
+  JWT_SECRET: process.env.JWT_SECRET || '',
 
   // ──────────────────────────────────────────────────────────
   //  DeepSeek API 参数

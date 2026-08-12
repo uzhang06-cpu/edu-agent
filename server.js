@@ -3,8 +3,6 @@
  * 含用户登录注册 + MongoDB 会话持久化
  */
 
-require('./db'); // 连接 MongoDB
-
 const express      = require('express');
 const http         = require('http');
 const { Server }   = require('socket.io');
@@ -24,6 +22,20 @@ const Session         = require('./models/Session');
 const app    = express();
 const server = http.createServer(app);
 const io     = new Server(server);
+
+const requiredSecrets = ['DEEPSEEK_API_KEY', 'MONGODB_URI', 'JWT_SECRET'];
+const missingSecrets = requiredSecrets.filter(name => !config[name]);
+if (missingSecrets.length) {
+  console.error(`[Config] 缺少必要环境变量: ${missingSecrets.join(', ')}`);
+  console.error('[Config] 请在本地 .env 或部署平台的环境变量中配置，禁止把密钥写入代码。');
+  process.exit(1);
+}
+if (config.JWT_SECRET.length < 32) {
+  console.error('[Config] JWT_SECRET 至少需要 32 个字符。');
+  process.exit(1);
+}
+
+require('./db'); // 校验配置后再连接 MongoDB
 
 app.use(express.json());
 

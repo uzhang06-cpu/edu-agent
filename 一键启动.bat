@@ -10,10 +10,16 @@ echo  ================================================
 echo.
 
 :: ====================================================
-::  在下面这行引号内填入你的 DeepSeek API Key
-::  示例: set API_KEY=sk-abc123def456
+::  密钥只放在本机 .env，不要写进本文件或提交到 Git
 :: ====================================================
-set API_KEY=sk-07cadda576314359a6c4b217df12882a
+if not exist ".env" (
+    copy /y ".env.example" ".env" >nul
+    echo  已生成 .env，请用记事本填写 DEEPSEEK_API_KEY、MONGODB_URI 和 JWT_SECRET。
+    start notepad ".env"
+    echo  填写并保存后，请重新运行本启动器。
+    pause
+    exit /b 0
+)
 
 
 :: ─── 检测 Node.js ────────────────────────────────────
@@ -31,13 +37,17 @@ if %errorlevel% neq 0 (
 for /f "tokens=*" %%v in ('node -v') do set NODE_VER=%%v
 echo Node.js OK: %NODE_VER%
 
-:: ─── 写入 .env ───────────────────────────────────────
+:: ─── 检查 .env ───────────────────────────────────────
 echo.
-echo [2/3] 写入 API Key...
-echo DEEPSEEK_API_KEY=%API_KEY%> .env
-echo SCHOOL_NAME=星光教育>> .env
-echo PORT=3000>> .env
-echo .env 已生成
+echo [2/3] 检查本地配置...
+findstr /B /C:"DEEPSEEK_API_KEY=your_deepseek_api_key_here" .env >nul
+if %errorlevel% equ 0 (
+    echo  .env 中的 DEEPSEEK_API_KEY 尚未填写。
+    start notepad ".env"
+    pause
+    exit /b 1
+)
+echo .env 配置已读取
 
 :: ─── 安装依赖 ─────────────────────────────────────────
 echo.
